@@ -1,0 +1,70 @@
+# Visio Temp File Remover Project Rules
+
+## Project Structure
+- All shared PowerShell scripts are located in the `scripts/` directory
+- Python CLI implementation is in `cli-tool/`
+- Node.js web application uses:
+  - Main application in root `app.js`
+  - Web UI files in `web-ui/`
+- Shared configuration files are in the root directory
+
+## Code Patterns
+- PowerShell scripts return structured JSON results
+- Both interfaces parse JSON output from PowerShell scripts
+- Input validation happens at both interface and script levels
+- File operations are performed exclusively by PowerShell scripts
+- Configuration is loaded from `config.json` or environment-specific override
+
+## Naming Conventions
+- PowerShell scripts use PascalCase verb-noun format (e.g., `Scan-VisioTempFiles.ps1`)
+- Python uses snake_case for functions and variables
+- JavaScript uses camelCase for variables and functions
+- Configuration keys use snake_case
+
+## Important Implementation Paths
+- PowerShell scripts are executed via subprocess with validated parameters
+- File scanning returns structured JSON data about found files
+- File deletion operations also return structured JSON results
+- Both interfaces present file selection to users before deletion
+- Configuration is shared between both interface components
+
+## Security Considerations
+- All user input must be validated before use
+- PowerShell scripts should never use Invoke-Expression
+- File paths must be validated before operations
+- System directories should be protected from deletion
+- File patterns should be restricted to known safe patterns
+
+## Error Handling
+- PowerShell scripts return structured error information as JSON
+- Both interfaces handle exceptions and provide user-friendly messages
+- Script execution timeouts are handled gracefully
+- Invalid inputs receive clear error messages
+
+## Known User Workflow
+1. User selects a directory to scan
+2. System scans for matching Visio temp files
+3. User selects files to delete from the results
+4. System performs deletion with validation
+5. Results are displayed to the user
+
+## Configuration Management
+- Base config in `config.json`
+- Environment-specific overrides in `config.[environment].json`
+- Environment variables can override configuration values
+
+## Testing Strategy
+- PowerShell scripts should be testable with Pester
+- API endpoints should have integration tests
+- CLI should have end-to-end workflow tests
+
+## Documentation Standards
+- PowerShell scripts should have comment-based help
+- Python functions should have docstrings
+- JavaScript should have JSDoc comments for functions
+- READMEs should be maintained for component usage
+
+## Future Evolution
+- Plan for migrating from PowerShell to Python for core operations
+- Prepare for cross-platform support in future versions
+- Consider supporting additional file types beyond Visio 
