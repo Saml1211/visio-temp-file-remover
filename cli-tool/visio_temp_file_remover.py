@@ -189,16 +189,25 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
         print(f"{Fore.RED}Error: No valid safe patterns to scan with.{Style.RESET_ALL}")
         return []
     
-    # For -File, parameters are passed positionally or by name.
-    # To pass an array like $Patterns, it's common to list them after the parameter name.
+    # Escape paths with quotes to handle spaces and special characters
+    dir_str_quoted = f'"{dir_str}"'  # Double quotes for PowerShell
+    
+    # Create a list of patterns with proper quoting
+    patterns_list = [f'"{p}"' for p in safe_patterns]  # Quote each pattern
+    patterns_array = "@(" + ",".join(patterns_list) + ")"  # Create PowerShell array
+    
+    # Build PowerShell command as a single string
+    # Call the script directly without ampersand operator to avoid parameter confusion
+    ps_command = f"& {SCAN_SCRIPT_PATH} -ScanPath {dir_str_quoted} -Patterns {patterns_array} -AsJson"
+    
     ps_cmd_list = [
-        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-        "-File", str(SCAN_SCRIPT_PATH),
-        "-ScanPath", dir_str,
-        "-Patterns" # Parameter name
-    ] + safe_patterns # PowerShell should collect these into the $Patterns array
+        "powershell", 
+        "-NoProfile", 
+        "-ExecutionPolicy", "Bypass",
+        "-Command", ps_command
+    ]
 
-    print(f"{Fore.YELLOW}Running PowerShell scan script: {SCAN_SCRIPT_PATH} for {dir_str}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}Running PowerShell scan script: {SCAN_SCRIPT_PATH} for {dir_str} with patterns {','.join(safe_patterns)}{Style.RESET_ALL}")
     
     try:
         completed = subprocess.run(
@@ -221,18 +230,31 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
             if is_actual_error:
                  print(f"{Fore.RED}PowerShell script error/warning:{Style.RESET_ALL}\n{Fore.YELLOW}{completed.stderr.strip()}{Style.RESET_ALL}")
 
-        if completed.returncode != 0 and completed.stdout.strip() != "[]":
-             print(f"{Fore.RED}PowerShell script failed (ret code {completed.returncode}):{Style.RESET_ALL}")
-             if completed.stdout.strip():
-                 print(f"{Fore.MAGENTA}STDOUT:\n{completed.stdout.strip()}{Style.RESET_ALL}")
-             return []
+        # Check for empty output
+        if not completed.stdout or completed.stdout.strip() == "":
+            print(f"{Fore.RED}PowerShell script returned no output.{Style.RESET_ALL}")
+            return []
 
+        # Check if output is valid JSON
         try:
             result_data = json.loads(completed.stdout.strip())
+            
+            # If we got an empty array, it means no files were found
+            if isinstance(result_data, list) and len(result_data) == 0:
+                print(f"{Fore.GREEN}No matching temporary Visio files found in the specified location.{Style.RESET_ALL}")
+                return []
+                
             found_files = [Path(item['FullName']) for item in result_data if isinstance(item, dict) and 'FullName' in item]
+            print(f"{Fore.GREEN}Found {len(found_files)} temporary Visio files.{Style.RESET_ALL}")
             return sorted(found_files)
         except json.JSONDecodeError as e:
-            print(f"{Fore.RED}Error parsing scan JSON: {e}{Style.RESET_ALL}\n{Fore.MAGENTA}Raw STDOUT:\n{completed.stdout.strip()}{Style.RESET_ALL}")
+            print(f"{Fore.RED}Error parsing scan JSON: {e}{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}Raw STDOUT:\n{completed.stdout.strip()}{Style.RESET_ALL}")
+            
+            # Despite the JSON error, let's check if we need to show 'no files found' message
+            if "No matching" in completed.stdout or completed.stdout.strip() == "[]":
+                print(f"{Fore.GREEN}No matching temporary Visio files found in the specified location.{Style.RESET_ALL}")
+            
             return []
     except subprocess.TimeoutExpired:
         print(f"{Fore.RED}Error: PowerShell script timed out after {SCRIPT_TIMEOUT} seconds.{Style.RESET_ALL}")
@@ -269,12 +291,12 @@ def select_files_for_deletion(file_list: list[Path], base_directory: Path) -> li
     return [Path(p) for p in selected_str_paths] if selected_str_paths else []
 
 def delete_files(selected_paths: list[Path]):
-    """Delete selected files using the Remove-VisioTempFiles.ps1 PowerShell script."""
+    """Delete selected files using direct PowerShell commands similar to the web UI's approach."""
     if not selected_paths:
         return
 
-    if not REMOVE_SCRIPT_PATH.is_file():
-        print(f"{Fore.RED}Error: Remove script not found at {REMOVE_SCRIPT_PATH}{Style.RESET_ALL}")
+    if not validate_powershell_available():
+        print(f"{Fore.RED}Error: PowerShell is not available on this system.{Style.RESET_ALL}")
         return
 
     confirm_delete = questionary.confirm(
@@ -299,61 +321,108 @@ def delete_files(selected_paths: list[Path]):
             print(f"{Fore.YELLOW}No valid files remaining to delete.{Style.RESET_ALL}")
             return
 
-    paths_to_delete_str = [str(p) for p in selected_paths]
-
-    ps_cmd_list = [
-        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-        "-File", str(REMOVE_SCRIPT_PATH),
-        "-FilePaths" # Parameter name
-    ] + paths_to_delete_str # PowerShell should collect these into the $FilePaths array
-
-    print(f"{Fore.YELLOW}Running PowerShell delete script: {REMOVE_SCRIPT_PATH} for {len(paths_to_delete_str)} files...{Style.RESET_ALL}")
-
+    # Collect paths as strings
+    file_paths = [str(p) for p in selected_paths]
+    
+    # Escape paths for PowerShell - escape single quotes by doubling them
+    # and wrap each path in single quotes
+    quoted_paths = [f"'{path.replace('\'', '\'\'')}'" for path in file_paths]
+    
+    # Build a PowerShell command that pipelines the paths through ForEach-Object
+    # This is similar to what the web UI does which works successfully
+    ps_command = f"""
+    $filesToDelete = @({','.join(quoted_paths)})
+    $results = @{{
+        deleted = @()
+        failed = @()
+    }}
+    
+    foreach ($file in $filesToDelete) {{
+        try {{
+            if (Test-Path -LiteralPath $file -PathType Leaf) {{
+                Remove-Item -LiteralPath $file -Force -ErrorAction Stop
+                $results.deleted += $file
+                Write-Host "Deleted: $file" -ForegroundColor Green
+            }} else {{
+                $results.failed += @{{ Path = $file; Error = "File not found or is not a regular file." }}
+                Write-Host "Not found: $file" -ForegroundColor Yellow
+            }}
+        }} catch {{
+            $results.failed += @{{ Path = $file; Error = $_.Exception.Message }}
+            Write-Host "Error: $file - $($_.Exception.Message)" -ForegroundColor Red
+        }}
+    }}
+    
+    # Output summary
+    Write-Host "----RESULTS----"
+    Write-Host "Deleted: $($results.deleted.Count) files"
+    Write-Host "Failed: $($results.failed.Count) files"
+    
+    # Return results as JSON for parsing
+    $results | ConvertTo-Json -Depth 3
+    """
+    
+    print(f"{Fore.YELLOW}Executing PowerShell delete command for {len(file_paths)} files...{Style.RESET_ALL}")
+    
     try:
         completed = subprocess.run(
-            ps_cmd_list,
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_command],
             capture_output=True,
             text=True,
             check=False,
             encoding='utf-8',
-            timeout=SCRIPT_TIMEOUT  # Add timeout to prevent hanging
+            timeout=SCRIPT_TIMEOUT
         )
-
-        if completed.stderr:
-            print(f"{Fore.RED}PowerShell script error/warning during delete:{Style.RESET_ALL}\n{Fore.YELLOW}{completed.stderr.strip()}{Style.RESET_ALL}")
-
-        if completed.returncode != 0:
-            print(f"{Fore.RED}PowerShell delete script failed (ret code {completed.returncode}).{Style.RESET_ALL}")
-
+        
+        # Process any standard error output
+        if completed.stderr and completed.stderr.strip():
+            print(f"{Fore.RED}PowerShell error output:{Style.RESET_ALL}\n{Fore.YELLOW}{completed.stderr.strip()}{Style.RESET_ALL}")
+        
+        # Try to parse JSON results if available
         try:
-            result_data = json.loads(completed.stdout.strip())
-            deleted_actual = result_data.get('deleted', [])
-            failed_actual = result_data.get('failed', [])
-
-            if deleted_actual:
-                print(f"{Fore.GREEN}Successfully deleted:{Style.RESET_ALL}")
-                for f_path_str in deleted_actual:
-                    print(f"  - {f_path_str}")
+            # Look for JSON in the output - it will be after the "----RESULTS----" line
+            output_lines = completed.stdout.strip().split('\n')
+            json_start = -1
             
-            if failed_actual:
-                print(f"\n{Fore.RED}Failed to delete:{Style.RESET_ALL}")
-                for item_data in failed_actual:
-                    if isinstance(item_data, dict):
-                        print(f"  - {item_data.get('Path', 'N/A')}: {item_data.get('Error', 'N/A')}")
-                    else:
-                        print(f"  - {item_data}: Unknown Error (unexpected format)")
-
-            print(f"\n{Style.BRIGHT}Summary:{Style.RESET_ALL} {len(deleted_actual)} deleted, {len(failed_actual)} failed.\n")
-
-        except json.JSONDecodeError as e:
-            print(f"{Fore.RED}Error parsing delete JSON: {e}{Style.RESET_ALL}\n{Fore.MAGENTA}Raw STDOUT:\n{completed.stdout.strip()}{Style.RESET_ALL}")
-
+            for i, line in enumerate(output_lines):
+                if "----RESULTS----" in line:
+                    json_start = i + 3  # Skip the summary lines
+                    break
+            
+            if json_start >= 0 and json_start < len(output_lines):
+                json_str = '\n'.join(output_lines[json_start:])
+                result_data = json.loads(json_str)
+                
+                deleted = result_data.get('deleted', [])
+                failed = result_data.get('failed', [])
+                
+                if deleted:
+                    print(f"{Fore.GREEN}Successfully deleted:{Style.RESET_ALL}")
+                    for path in deleted:
+                        print(f"  - {path}")
+                
+                if failed:
+                    print(f"\n{Fore.RED}Failed to delete:{Style.RESET_ALL}")
+                    for item in failed:
+                        if isinstance(item, dict):
+                            print(f"  - {item.get('Path', 'Unknown')}: {item.get('Error', 'Unknown error')}")
+                        else:
+                            print(f"  - {item}: Unknown error")
+                
+                print(f"\n{Style.BRIGHT}Summary:{Style.RESET_ALL} {len(deleted)} deleted, {len(failed)} failed.\n")
+            else:
+                print(f"{Fore.YELLOW}Could not find JSON results in PowerShell output. Raw output:{Style.RESET_ALL}")
+                print(completed.stdout)
+                
+        except json.JSONDecodeError:
+            # If JSON parsing fails, just show the raw output
+            print(f"{Fore.RED}Could not parse JSON results. Raw PowerShell output:{Style.RESET_ALL}")
+            print(completed.stdout)
+            
     except subprocess.TimeoutExpired:
-        print(f"{Fore.RED}Error: PowerShell delete script timed out after {SCRIPT_TIMEOUT} seconds.{Style.RESET_ALL}")
-    except FileNotFoundError:
-        print(f"{Fore.RED}Error: 'powershell' not found. Ensure it's in PATH.{Style.RESET_ALL}")
+        print(f"{Fore.RED}Error: PowerShell command timed out after {SCRIPT_TIMEOUT} seconds.{Style.RESET_ALL}")
     except Exception as e:
-        print(f"{Fore.RED}Unexpected error running delete script: {e}{Style.RESET_ALL}")
+        print(f"{Fore.RED}Unexpected error running delete command: {e}{Style.RESET_ALL}")
 
 def main():
     print(f"{Fore.CYAN}{Style.BRIGHT}Welcome to the Visio Temporary File Remover Wizard!{Style.RESET_ALL}")
