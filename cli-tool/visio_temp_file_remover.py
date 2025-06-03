@@ -4,15 +4,95 @@ import subprocess
 import platform
 import sys
 import re
+import time
 from pathlib import Path
 
 import questionary # type: ignore
-from questionary import Choice # type: ignore
-from colorama import Fore, Style, init # type: ignore
-init() # Initialize colorama
+from questionary import Choice, Style as QStyle, Validator # type: ignore
+from colorama import Fore, Style, Back, init, AnsiToWin32 # type: ignore
+import os
+
+# Initialize colorama for Windows PowerShell
+try:
+    # Try using just_fix_windows_console() first (available in newer colorama versions)
+    from colorama import just_fix_windows_console
+    just_fix_windows_console()
+except ImportError:
+    # Fall back to older method if needed
+    init(autoreset=True, convert=True, strip=False, wrap=True)
+    
+    # Additional handling for Windows PowerShell if necessary
+    if platform.system() == 'Windows':
+        import sys
+        # Re-initialize for PowerShell compatibility
+        init(autoreset=True, convert=True, strip=False, wrap=True)
+        # Only wrap if not already wrapped
+        if not isinstance(sys.stdout, AnsiToWin32):
+            sys.stdout = AnsiToWin32(sys.stdout, strip=False, convert=True).stream
+        if not isinstance(sys.stderr, AnsiToWin32):
+            sys.stderr = AnsiToWin32(sys.stderr, strip=False, convert=True).stream
+
+# Set up a cleanup function to ensure we reset terminal state properly
+def reset_terminal_state():
+    """Reset terminal state to prevent issues with raw ANSI codes"""
+    try:
+        init(autoreset=True, convert=True, strip=False, wrap=True)
+    except Exception:
+        pass
+
+# More reliable PowerShell detection
+def is_running_in_powershell():
+    """Determine if we're running in PowerShell with high reliability"""
+    # Check environment variables
+    if "POWERSHELL_DISTRIBUTION_CHANNEL" in os.environ:
+        return True
+    if "PSModulePath" in os.environ:
+        return True
+    # Check shell info in sys.argv
+    for arg in sys.argv:
+        if "powershell" in arg.lower():
+            return True
+    # Check Windows platform
+    if platform.system() == 'Windows':
+        return True
+    return False
+
+# Set flag for PowerShell environment
+IS_POWERSHELL = is_running_in_powershell()
+
+# Instead of trying to create a plain style with QStyle which requires proper style
+# formatting strings, we'll take a different approach for PowerShell environments
+
+# For non-PowerShell environments, use the standard colorful style
+COLORFUL_STYLE = QStyle([
+    ('qmark', 'fg:cyan bold'),         # question mark
+    ('question', 'bold'),              # question text
+    ('answer', 'fg:green bold'),       # submitted answer text
+    ('pointer', 'fg:cyan bold'),       # pointer used in select and checkbox prompts
+    ('highlighted', 'fg:cyan bold'),   # pointed-at choice in select and checkbox prompts
+    ('selected', 'fg:green'),          # selected choice in checkbox prompts
+    ('instruction', 'fg:yellow'),      # user instructions for select, rawselect, checkbox
+    ('text', ''),                      # plain text
+    ('disabled', 'fg:gray italic')     # disabled choices for select and checkbox prompts
+])
+
+# For PowerShell, we'll use a different approach:
+# 1. Disable styling completely in PowerShell by setting strip=True in colorama
+# 2. Use plain text prompt strings instead of styled ones
+
+# Only use the style for non-PowerShell environments
+questionary_style = COLORFUL_STYLE
 
 # Constants
 SCRIPT_TIMEOUT = 30  # 30 seconds timeout for PowerShell scripts
+VERSION = "1.1.0"
+
+# ASCII art banner (simple)
+BANNER = f"""
+{Fore.CYAN}{Style.BRIGHT}╔══════════════════════════════════════════════════════╗
+║      Visio Temporary File Remover Utility v{VERSION}      ║
+╚══════════════════════════════════════════════════════╝{Style.RESET_ALL}
+"""
 
 # Editable: Patterns for Visio temp/backup files
 # TEMP_PATTERNS = [ # Commented out, will be loaded from config
@@ -26,6 +106,83 @@ SCRIPT_TIMEOUT = 30  # 30 seconds timeout for PowerShell scripts
 # DEFAULT_DIR = r'Z:\ENGINEERING TEMPLATES\VISIO SHAPES 2025' # Commented out, will be loaded from config
 
 CONFIG_FILE_PATH = Path(__file__).resolve().parent.parent / 'config.json'
+
+def print_status(message, status_type="info"):
+    """Print a formatted status message with appropriate colors and symbols"""
+    symbols = {
+        "info": f"{Fore.BLUE}[i]{Style.RESET_ALL}",
+        "success": f"{Fore.GREEN}[+]{Style.RESET_ALL}",
+        "warning": f"{Fore.YELLOW}[!]{Style.RESET_ALL}",
+        "error": f"{Fore.RED}[x]{Style.RESET_ALL}",
+        "question": f"{Fore.MAGENTA}[?]{Style.RESET_ALL}",
+        "working": f"{Fore.CYAN}[*]{Style.RESET_ALL}"
+    }
+    
+    colors = {
+        "info": Fore.BLUE,
+        "success": Fore.GREEN,
+        "warning": Fore.YELLOW,
+        "error": Fore.RED,
+        "question": Fore.MAGENTA,
+        "working": Fore.CYAN
+    }
+    
+    symbol = symbols.get(status_type, symbols["info"])
+    color = colors.get(status_type, "")
+    
+    print(f"{symbol} {color}{message}{Style.RESET_ALL}")
+
+def show_spinner(duration=0.5, message="Working"):
+    """Show a simple spinner animation for the given duration"""
+    spinner_chars = ['|', '/', '-', '\\']
+    start_time = time.time()
+    i = 0
+    
+    try:
+        while time.time() - start_time < duration:
+            sys.stdout.write(f"\r{Fore.CYAN}{spinner_chars[i]} {message}...{Style.RESET_ALL}")
+            sys.stdout.flush()
+            time.sleep(0.1)
+            i = (i + 1) % len(spinner_chars)
+        sys.stdout.write("\r" + " " * (len(message) + 15) + "\r")
+        sys.stdout.flush()
+    except KeyboardInterrupt:
+        sys.stdout.write("\r" + " " * (len(message) + 15) + "\r")
+        sys.stdout.flush()
+        raise
+
+def print_help():
+    """Display help information about the tool"""
+    help_text = f"""
+{Fore.CYAN}{Style.BRIGHT}ABOUT{Style.RESET_ALL}
+  This tool helps you find and delete temporary Visio files
+  that may be taking up space or causing issues.
+  
+{Fore.CYAN}{Style.BRIGHT}WORKFLOW{Style.RESET_ALL}
+  1. Select or enter a directory to scan
+  2. Review found temporary files
+  3. Select files to delete
+  4. Confirm deletion
+
+{Fore.CYAN}{Style.BRIGHT}FILE PATTERNS{Style.RESET_ALL}
+  The tool searches for these Visio temporary file patterns:
+    """
+    
+    print(help_text)
+    
+    # Load and display the actual patterns from config
+    try:
+        with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+            patterns = config_data.get('temp_file_patterns', [])
+            
+            for pattern in patterns:
+                print(f"  • {Fore.GREEN}{pattern}{Style.RESET_ALL}")
+    except:
+        print("  • Could not load patterns from config")
+    
+    print()
+    input(f"{Fore.YELLOW}Press Enter to continue...{Style.RESET_ALL}")
 
 def load_config():
     """Loads configuration from config.json"""
@@ -48,7 +205,7 @@ def load_config():
             if re.match(r'^[~$*.A-Za-z0-9\-_]+$', pattern):
                 safe_patterns.append(pattern)
             else:
-                print(f"{Fore.YELLOW}Warning: Ignoring potentially unsafe pattern: {pattern}{Style.RESET_ALL}")
+                print_status(f"Ignoring potentially unsafe pattern: {pattern}", "warning")
         
         if not safe_patterns:
             raise ValueError("No valid file patterns found in configuration")
@@ -56,13 +213,13 @@ def load_config():
         config_data['temp_file_patterns'] = safe_patterns
         return config_data
     except FileNotFoundError:
-        print(f"{Fore.RED}Error: Configuration file not found at {CONFIG_FILE_PATH}{Style.RESET_ALL}")
+        print_status(f"Configuration file not found at {CONFIG_FILE_PATH}", "error")
         sys.exit(1)
     except json.JSONDecodeError:
-        print(f"{Fore.RED}Error: Could not decode JSON from {CONFIG_FILE_PATH}{Style.RESET_ALL}")
+        print_status(f"Could not decode JSON from {CONFIG_FILE_PATH}", "error")
         sys.exit(1)
     except ValueError as ve:
-        print(f"{Fore.RED}Error in configuration: {ve}{Style.RESET_ALL}")
+        print_status(f"Error in configuration: {ve}", "error")
         sys.exit(1)
     return None # Should not be reached if sys.exit works
 
@@ -79,25 +236,43 @@ REMOVE_SCRIPT_PATH = SCRIPTS_DIR / 'Remove-VisioTempFiles.ps1'
 def validate_scripts_exist():
     """Validate that PowerShell scripts exist and are accessible"""
     if not SCAN_SCRIPT_PATH.is_file():
-        print(f"{Fore.RED}Error: Scan script not found at {SCAN_SCRIPT_PATH}{Style.RESET_ALL}")
+        print_status(f"Scan script not found at {SCAN_SCRIPT_PATH}", "error")
         return False
     if not REMOVE_SCRIPT_PATH.is_file():
-        print(f"{Fore.RED}Error: Remove script not found at {REMOVE_SCRIPT_PATH}{Style.RESET_ALL}")
+        print_status(f"Remove script not found at {REMOVE_SCRIPT_PATH}", "error")
         return False
     return True
 
 def validate_powershell_available():
     """Check if PowerShell is available on the system"""
-    try:
-        result = subprocess.run(
-            ["powershell", "-Command", "Write-Output 'PowerShell Test'"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return result.returncode == 0
-    except (subprocess.SubprocessError, FileNotFoundError):
-        return False
+    # On Windows, we first check if we're already running in PowerShell
+    if platform.system() == 'Windows' and IS_POWERSHELL:
+        # We're already in PowerShell, so it's definitely available
+        return True
+    
+    # Try different PowerShell executables
+    powershell_cmds = ["powershell", "pwsh"]
+    
+    for ps_cmd in powershell_cmds:
+        try:
+            result = subprocess.run(
+                [ps_cmd, "-Command", "Write-Output 'PowerShell Test'"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                return True
+        except (subprocess.SubprocessError, FileNotFoundError):
+            continue
+    
+    # If we're on Windows, PowerShell should always be available
+    # So as a last resort, if we're on Windows, we'll assume PowerShell is available
+    if platform.system() == 'Windows':
+        print_status("PowerShell detection failed, but since we're on Windows, assuming it's available.", "warning")
+        return True
+        
+    return False
 
 def get_directory_to_scan():
     """
@@ -111,52 +286,82 @@ def get_directory_to_scan():
         choices = []
         if default_path_valid and default_path_obj:
             choices.append(Choice(title=f"Default: {DEFAULT_DIR}", value="default"))
-        choices.append(Choice(title="Enter custom directory path", value="custom"))
-        choices.append(Choice(title="Exit program", value="exit"))
+        
+        if IS_POWERSHELL:
+            choices.append(Choice(title="Enter custom directory path", value="custom"))
+            choices.append(Choice(title="Show help information", value="help"))
+            choices.append(Choice(title="Exit program", value="exit"))
+        else:
+            choices.append(Choice(title="Enter custom directory path", value="custom"))
+            choices.append(Choice(title="Show help information", value="help"))
+            choices.append(Choice(title=f"{Fore.YELLOW}Exit program{Style.RESET_ALL}", value="exit"))
 
         selection_prompt_message = "Select an option for the directory to scan:"
         if DEFAULT_DIR and not default_path_valid:
-            selection_prompt_message = (
-                f"{Fore.YELLOW}Configured default directory '{DEFAULT_DIR}' is invalid or not accessible.{Style.RESET_ALL}\n"
-                "Select an option:"
-            )
+            print_status(f"Configured default directory '{DEFAULT_DIR}' is invalid or not accessible.", "warning")
+            selection_prompt_message = "Select an option:"
         elif not DEFAULT_DIR:
-             selection_prompt_message = (
-                f"{Fore.YELLOW}No default directory configured.{Style.RESET_ALL}\n"
-                "Select an option:"
-            )
+            print_status("No default directory configured.", "info")
+            selection_prompt_message = "Select an option:"
 
-        action = questionary.select(
-            selection_prompt_message,
-            choices=choices,
-            qmark="?"
-        ).ask()
-
-        if action == "default":
-            if default_path_valid and default_path_obj:
-                print(f"{Fore.GREEN}Using default directory: {DEFAULT_DIR}{Style.RESET_ALL}")
-                return default_path_obj.resolve()
-            else:
-                print(f"{Fore.RED}Error: Default directory was selected but is invalid or not configured.{Style.RESET_ALL}")
-                if questionary.confirm("Try entering a custom path instead? (No to exit)").ask():
-                    action = "custom"
-                else:
-                    return None
-        
-        if action == "custom":
-            path_str = questionary.text(
-                "Enter the directory path to scan:",
-                validate=lambda text: True if text and Path(text.strip('"'" ").strip("'")).is_dir()
-                                   else ("Path is not a valid directory or does not exist."
-                                         if text else "Input cannot be empty. Press ESC to cancel."),
+        if IS_POWERSHELL:
+            # For PowerShell, use minimal styling to avoid ANSI codes
+            action = questionary.select(
+                selection_prompt_message,
+                choices=choices,
+                qmark="?"
+            ).ask()
+        else:
+            # For other terminals, use colorful styling
+            action = questionary.select(
+                selection_prompt_message,
+                choices=choices,
+                style=questionary_style,
+                qmark=f"{Fore.CYAN}?{Style.RESET_ALL}"
             ).ask()
 
+        if action == "help":
+            print_help()
+            continue
+        elif action == "default":
+            if default_path_valid and default_path_obj:
+                print_status(f"Using default directory: {DEFAULT_DIR}", "success")
+                return default_path_obj.resolve()
+            else:
+                print_status("Default directory was selected but is invalid or not configured.", "error")
+                if IS_POWERSHELL:
+                    if questionary.confirm("Try entering a custom path instead? (No to exit)").ask():
+                        action = "custom"
+                    else:
+                        return None
+                else:
+                    if questionary.confirm("Try entering a custom path instead? (No to exit)", style=questionary_style).ask():
+                        action = "custom"
+                    else:
+                        return None
+        
+        if action == "custom":
+            # Define validation function
+            validator = lambda text: True if text and Path(text.strip('"'" ").strip("'")).is_dir() else ("Path is not a valid directory or does not exist." if text else "Input cannot be empty. Press ESC to cancel.")
+            
+            if IS_POWERSHELL:
+                path_str = questionary.text(
+                    "Enter the directory path to scan:",
+                    validate=validator
+                ).ask()
+            else:
+                path_str = questionary.text(
+                    "Enter the directory path to scan:",
+                    validate=validator,
+                    style=questionary_style
+                ).ask()
+
             if path_str is None:
-                print(f"{Fore.YELLOW}Custom path entry cancelled. Returning to options.{Style.RESET_ALL}")
+                print_status("Custom path entry cancelled. Returning to options.", "warning")
                 continue
             else:
                 chosen_path = Path(path_str.strip('"'" ").strip("'")).resolve()
-                print(f"{Fore.GREEN}Selected directory: {chosen_path}{Style.RESET_ALL}")
+                print_status(f"Selected directory: {chosen_path}", "success")
                 return chosen_path
         elif action == "exit" or action is None:
             return None
@@ -167,14 +372,14 @@ def get_directory_to_scan():
 def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
     """Find files using the Scan-VisioTempFiles.ps1 PowerShell script."""
     if not SCAN_SCRIPT_PATH.is_file():
-        print(f"{Fore.RED}Error: Scan script not found at {SCAN_SCRIPT_PATH}{Style.RESET_ALL}")
+        print_status(f"Scan script not found at {SCAN_SCRIPT_PATH}", "error")
         return []
 
     dir_str = str(directory)
     
     # Validate parameters before passing to PowerShell
     if not os.path.isdir(dir_str):
-        print(f"{Fore.RED}Error: Directory does not exist or is not accessible: {dir_str}{Style.RESET_ALL}")
+        print_status(f"Directory does not exist or is not accessible: {dir_str}", "error")
         return []
     
     # Validate each pattern for safety
@@ -183,10 +388,10 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
         if re.match(r'^[~$*.A-Za-z0-9\-_]+$', pattern):
             safe_patterns.append(pattern)
         else:
-            print(f"{Fore.YELLOW}Warning: Skipping potentially unsafe pattern: {pattern}{Style.RESET_ALL}")
+            print_status(f"Skipping potentially unsafe pattern: {pattern}", "warning")
     
     if not safe_patterns:
-        print(f"{Fore.RED}Error: No valid safe patterns to scan with.{Style.RESET_ALL}")
+        print_status("No valid safe patterns to scan with.", "error")
         return []
     
     # Escape paths with quotes to handle spaces and special characters
@@ -207,7 +412,8 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
         "-Command", ps_command
     ]
 
-    print(f"{Fore.CYAN}Running PowerShell scan script: {SCAN_SCRIPT_PATH} for {dir_str} with patterns {','.join(safe_patterns)}{Style.RESET_ALL}")
+    print_status(f"Scanning {dir_str} with {len(safe_patterns)} patterns...", "working")
+    show_spinner(1, "Starting scan")
     
     try:
         completed = subprocess.run(
@@ -228,11 +434,12 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
             except json.JSONDecodeError:
                 pass 
             if is_actual_error:
-                 print(f"{Fore.RED}PowerShell script error/warning:{Style.RESET_ALL}\n{Fore.YELLOW}{completed.stderr.strip()}{Style.RESET_ALL}")
+                print_status("PowerShell script error/warning:", "error")
+                print(f"{Fore.YELLOW}{completed.stderr.strip()}{Style.RESET_ALL}")
 
         # Check for empty output
         if not completed.stdout or completed.stdout.strip() == "":
-            print(f"{Fore.RED}PowerShell script returned no output.{Style.RESET_ALL}")
+            print_status("PowerShell script returned no output.", "error")
             return []
 
         # Check if output is valid JSON
@@ -241,40 +448,111 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
             
             # If we got an empty array, it means no files were found
             if isinstance(result_data, list) and len(result_data) == 0:
-                print(f"{Fore.GREEN}No matching temporary Visio files found in the specified location.{Style.RESET_ALL}")
+                print_status("No matching temporary Visio files found in the specified location.", "info")
                 return []
                 
             found_files = [Path(item['FullName']) for item in result_data if isinstance(item, dict) and 'FullName' in item]
-            print(f"{Fore.GREEN}Found {len(found_files)} temporary Visio files.{Style.RESET_ALL}")
+            print_status(f"Found {len(found_files)} temporary Visio files.", "success")
             return sorted(found_files)
         except json.JSONDecodeError as e:
-            print(f"{Fore.RED}Error parsing scan JSON: {e}{Style.RESET_ALL}")
+            print_status(f"Error parsing scan JSON: {e}", "error")
             print(f"{Fore.MAGENTA}Raw STDOUT:\n{completed.stdout.strip()}{Style.RESET_ALL}")
             
             # Despite the JSON error, let's check if we need to show 'no files found' message
             if "No matching" in completed.stdout or completed.stdout.strip() == "[]":
-                print(f"{Fore.GREEN}No matching temporary Visio files found in the specified location.{Style.RESET_ALL}")
+                print_status("No matching temporary Visio files found in the specified location.", "info")
             
             return []
     except subprocess.TimeoutExpired:
-        print(f"{Fore.RED}Error: PowerShell script timed out after {SCRIPT_TIMEOUT} seconds.{Style.RESET_ALL}")
+        print_status(f"PowerShell script timed out after {SCRIPT_TIMEOUT} seconds.", "error")
         return []
     except FileNotFoundError:
-        print(f"{Fore.RED}Error: 'powershell' not found. Ensure it's in PATH.{Style.RESET_ALL}")
+        print_status("'powershell' not found. Ensure it's in PATH.", "error")
         return []
     except Exception as e:
-        print(f"{Fore.RED}Unexpected error running scan script: {e}{Style.RESET_ALL}")
+        print_status(f"Unexpected error running scan script: {e}", "error")
         return []
     return [] # Fallback
+
+def display_file_list(file_list: list[Path], base_directory: Path):
+    """Display a formatted list of files with numerical index"""
+    if not file_list:
+        return
+    
+    print(f"\n{Fore.CYAN}{Style.BRIGHT}Found {len(file_list)} temporary Visio files:{Style.RESET_ALL}")
+    print("─" * 80)
+    print(f"{Fore.CYAN}{'#':>3} | {'Filename':<30} | {'Location':<40}{Style.RESET_ALL}")
+    print("─" * 80)
+    
+    for i, f_path in enumerate(file_list, 1):
+        try:
+            rel_parent = f_path.parent.relative_to(base_directory)
+        except ValueError:
+            rel_parent = f_path.parent # Fallback to absolute if not under base_directory
+        
+        # Format the filename and location for better readability
+        filename = f_path.name
+        location = str(rel_parent)
+        
+        # Truncate if too long
+        if len(filename) > 28:
+            filename = filename[:25] + "..."
+        if len(location) > 38:
+            location = "..." + location[-35:]
+            
+        print(f"{i:>3} | {Fore.GREEN}{filename:<30}{Style.RESET_ALL} | {location:<40}")
+    
+    print("─" * 80)
+    print()
 
 def select_files_for_deletion(file_list: list[Path], base_directory: Path) -> list[Path]:
     """Prompt user to select files to delete."""
     if not file_list:
-        print(f"{Fore.GREEN}No Visio temp files found.{Style.RESET_ALL}")
+        print_status("No Visio temp files found.", "info")
         return []
     
+    # First display a formatted list of all files
+    display_file_list(file_list, base_directory)
+    
+    # Modify choices based on environment
     choices = []
-    for f_path in file_list:
+    if IS_POWERSHELL:
+        choices = [
+            Choice(title="Select all files", value="all"),
+            Choice(title="Select individual files", value="individual"),
+            Choice(title="Cancel", value="cancel")
+        ]
+    else:
+        # Use colorful styling for non-PowerShell terminals
+        choices = [
+            Choice(title="Select all files", value="all"),
+            Choice(title="Select individual files", value="individual"),
+            Choice(title=f"{Fore.YELLOW}Cancel{Style.RESET_ALL}", value="cancel")
+        ]
+    
+    if IS_POWERSHELL:
+        selection_method = questionary.select(
+            "How would you like to select files for deletion?",
+            choices=choices,
+            qmark="?"
+        ).ask()
+    else:
+        selection_method = questionary.select(
+            "How would you like to select files for deletion?",
+            choices=choices,
+            style=questionary_style,
+            qmark=f"{Fore.CYAN}?{Style.RESET_ALL}"
+        ).ask()
+    
+    if selection_method == "cancel" or selection_method is None:
+        return []
+    
+    if selection_method == "all":
+        return file_list
+    
+    # For individual selection
+    choices = []
+    for i, f_path in enumerate(file_list):
         try:
             rel_parent = f_path.parent.relative_to(base_directory)
         except ValueError:
@@ -282,11 +560,19 @@ def select_files_for_deletion(file_list: list[Path], base_directory: Path) -> li
         display = f"{f_path.name} (in {rel_parent})"
         choices.append(Choice(title=display, value=str(f_path))) # Store as string for Q
         
-    selected_str_paths = questionary.checkbox(
-        "Select files to delete (Space to toggle, Enter to confirm):",
-        choices=choices,
-        # validate=lambda vals: True if vals else "Select at least one file or ESC to cancel."
-    ).ask()
+    if IS_POWERSHELL:
+        selected_str_paths = questionary.checkbox(
+            "Select files to delete (Space to toggle, Enter to confirm):",
+            choices=choices,
+            # validate=lambda vals: True if vals else "Select at least one file or ESC to cancel."
+        ).ask()
+    else:
+        selected_str_paths = questionary.checkbox(
+            "Select files to delete (Space to toggle, Enter to confirm):",
+            choices=choices,
+            style=questionary_style,
+            # validate=lambda vals: True if vals else "Select at least one file or ESC to cancel."
+        ).ask()
     
     return [Path(p) for p in selected_str_paths] if selected_str_paths else []
 
@@ -296,29 +582,46 @@ def delete_files(selected_paths: list[Path]):
         return
 
     if not validate_powershell_available():
-        print(f"{Fore.RED}Error: PowerShell is not available on this system.{Style.RESET_ALL}")
+        print_status("PowerShell is not available on this system.", "error")
         return
 
-    confirm_delete = questionary.confirm(
-        f"Are you sure you want to delete {len(selected_paths)} selected file(s)?"
-    ).ask()
+    # Display the files selected for deletion in a clear format
+    print(f"\n{Fore.YELLOW}{Style.BRIGHT}Files selected for deletion:{Style.RESET_ALL}")
+    for i, path in enumerate(selected_paths, 1):
+        print(f"{i:>3}. {path.name} ({path.parent})")
+    print()
+
+    if IS_POWERSHELL:
+        confirm_delete = questionary.confirm(
+            f"Are you sure you want to delete these {len(selected_paths)} file(s)?"
+        ).ask()
+    else:
+        confirm_delete = questionary.confirm(
+            f"Are you sure you want to delete these {len(selected_paths)} file(s)?",
+            style=questionary_style
+        ).ask()
     if not confirm_delete:
-        print(f"{Fore.YELLOW}Deletion cancelled by user.{Style.RESET_ALL}")
+        print_status("Deletion cancelled by user.", "warning")
         return
 
     # Validate that all files exist before attempting deletion
     invalid_paths = [p for p in selected_paths if not p.is_file()]
     if invalid_paths:
-        print(f"{Fore.RED}Error: The following files don't exist or are not accessible:{Style.RESET_ALL}")
+        print_status("The following files don't exist or are not accessible:", "error")
         for p in invalid_paths:
             print(f"  - {p}")
-        if not questionary.confirm("Continue with deleting only valid files?").ask():
-            print(f"{Fore.YELLOW}Deletion cancelled by user.{Style.RESET_ALL}")
-            return
+        if IS_POWERSHELL:
+            if not questionary.confirm("Continue with deleting only valid files?").ask():
+                print_status("Deletion cancelled by user.", "warning")
+                return
+        else:
+            if not questionary.confirm("Continue with deleting only valid files?", style=questionary_style).ask():
+                print_status("Deletion cancelled by user.", "warning")
+                return
         # Filter out invalid paths
         selected_paths = [p for p in selected_paths if p.is_file()]
         if not selected_paths:
-            print(f"{Fore.YELLOW}No valid files remaining to delete.{Style.RESET_ALL}")
+            print_status("No valid files remaining to delete.", "warning")
             return
 
     # Collect paths as strings
@@ -362,7 +665,8 @@ def delete_files(selected_paths: list[Path]):
     $results | ConvertTo-Json -Depth 3
     """
     
-    print(f"{Fore.YELLOW}Executing PowerShell delete command for {len(file_paths)} files...{Style.RESET_ALL}")
+    print_status(f"Deleting {len(file_paths)} files...", "working")
+    show_spinner(1.5, "Processing")
     
     try:
         completed = subprocess.run(
@@ -376,7 +680,8 @@ def delete_files(selected_paths: list[Path]):
         
         # Process any standard error output
         if completed.stderr and completed.stderr.strip():
-            print(f"{Fore.RED}PowerShell error output:{Style.RESET_ALL}\n{Fore.YELLOW}{completed.stderr.strip()}{Style.RESET_ALL}")
+            print_status("PowerShell error output:", "error")
+            print(f"{Fore.YELLOW}{completed.stderr.strip()}{Style.RESET_ALL}")
         
         # Try to parse JSON results if available
         try:
@@ -396,45 +701,61 @@ def delete_files(selected_paths: list[Path]):
                 deleted = result_data.get('deleted', [])
                 failed = result_data.get('failed', [])
                 
+                print("\n" + "─" * 80)
+                print(f"{Style.BRIGHT}{Fore.CYAN}DELETION RESULTS{Style.RESET_ALL}")
+                print("─" * 80)
+                
                 if deleted:
-                    print(f"{Fore.GREEN}Successfully deleted:{Style.RESET_ALL}")
-                    for path in deleted:
-                        print(f"  - {path}")
+                    print(f"{Fore.GREEN}{Style.BRIGHT}Successfully deleted: {len(deleted)}{Style.RESET_ALL}")
+                    for path in deleted[:5]:  # Show first 5 only if many
+                        print(f"  {Fore.GREEN}+{Style.RESET_ALL} {Path(path).name}")
+                    if len(deleted) > 5:
+                        print(f"  {Fore.GREEN}...and {len(deleted) - 5} more files{Style.RESET_ALL}")
                 
                 if failed:
-                    print(f"\n{Fore.RED}Failed to delete:{Style.RESET_ALL}")
+                    print(f"\n{Fore.RED}{Style.BRIGHT}Failed to delete: {len(failed)}{Style.RESET_ALL}")
                     for item in failed:
                         if isinstance(item, dict):
-                            print(f"  - {item.get('Path', 'Unknown')}: {item.get('Error', 'Unknown error')}")
+                            path = item.get('Path', 'Unknown')
+                            error = item.get('Error', 'Unknown error')
+                            print(f"  {Fore.RED}x{Style.RESET_ALL} {Path(path).name}: {error}")
                         else:
-                            print(f"  - {item}: Unknown error")
+                            print(f"  {Fore.RED}x{Style.RESET_ALL} {item}: Unknown error")
                 
-                print(f"\n{Style.BRIGHT}Summary:{Style.RESET_ALL} {len(deleted)} deleted, {len(failed)} failed.\n")
+                print("\n" + "─" * 80)
+                print(f"{Style.BRIGHT}Summary:{Style.RESET_ALL} {len(deleted)} deleted, {len(failed)} failed.\n")
             else:
-                print(f"{Fore.YELLOW}Could not find JSON results in PowerShell output. Raw output:{Style.RESET_ALL}")
+                print_status("Could not find JSON results in PowerShell output. Raw output:", "warning")
                 print(completed.stdout)
                 
         except json.JSONDecodeError:
             # If JSON parsing fails, just show the raw output
-            print(f"{Fore.RED}Could not parse JSON results. Raw PowerShell output:{Style.RESET_ALL}")
+            print_status("Could not parse JSON results. Raw PowerShell output:", "error")
             print(completed.stdout)
             
     except subprocess.TimeoutExpired:
-        print(f"{Fore.RED}Error: PowerShell command timed out after {SCRIPT_TIMEOUT} seconds.{Style.RESET_ALL}")
+        print_status(f"PowerShell command timed out after {SCRIPT_TIMEOUT} seconds.", "error")
     except Exception as e:
-        print(f"{Fore.RED}Unexpected error running delete command: {e}{Style.RESET_ALL}")
+        print_status(f"Unexpected error running delete command: {e}", "error")
 
 def main():
-    print(f"{Fore.CYAN}{Style.BRIGHT}Welcome to the Visio Temporary File Remover Wizard!{Style.RESET_ALL}")
+    print(BANNER)
+    print(f"{Fore.CYAN}This utility helps you find and remove temporary Visio files.{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}Type 'help' at any prompt for more information.{Style.RESET_ALL}\n")
 
     # Validate environment before starting
     if not validate_powershell_available():
-        print(f"{Fore.RED}Error: PowerShell is not available on this system.{Style.RESET_ALL}")
-        print(f"{Fore.RED}This tool requires PowerShell to run. Please install PowerShell and try again.{Style.RESET_ALL}")
+        print_status("PowerShell is not available on this system.", "error")
+        print_status("This tool requires PowerShell to run. Please install PowerShell and try again.", "error")
         sys.exit(1)
+        
+    # Print PowerShell detection info
+    if IS_POWERSHELL:
+        # Use simpler styling for PowerShell terminals
+        print_status("PowerShell environment detected. Using simplified styling for better compatibility.", "info")
     
     if not validate_scripts_exist():
-        print(f"{Fore.RED}Error: Required PowerShell scripts are missing.{Style.RESET_ALL}")
+        print_status("Required PowerShell scripts are missing.", "error")
         sys.exit(1)
     
     try:
@@ -442,24 +763,52 @@ def main():
             target_directory = get_directory_to_scan()
 
             if target_directory is None:
-                print(f"{Fore.CYAN}Exiting program.{Style.RESET_ALL}")
+                print_status("Exiting program.", "info")
                 break
 
-            print(f"{Fore.BLUE}Scanning {Style.BRIGHT}{target_directory}{Style.NORMAL} for files...{Style.RESET_ALL}")
+            print_status(f"Scanning {Style.BRIGHT}{target_directory}{Style.NORMAL} for Visio temporary files...", "working")
             found_temp_files = find_temp_files(target_directory, TEMP_PATTERNS)
             
             if not found_temp_files:
-                print(f"{Fore.GREEN}No matching temporary Visio files found in the specified location.{Style.RESET_ALL}")
+                print_status("No matching temporary Visio files found in the specified location.", "info")
             else:
                 files_to_delete = select_files_for_deletion(found_temp_files, target_directory)
                 if files_to_delete:
                     delete_files(files_to_delete)
             
-            if not questionary.confirm("Would you like to scan another location or exit?", default=True, qmark="?").ask():
-                print(f"{Fore.CYAN}Exiting program.{Style.RESET_ALL}")
+            # Make sure no color formatting is used in PowerShell
+            if IS_POWERSHELL:
+                continue_choice = questionary.select(
+                    "What would you like to do next?",
+                    choices=[
+                        Choice(title="Scan another location", value="scan"),
+                        Choice(title="Exit program", value="exit")
+                    ],
+                    qmark="?"
+                ).ask()
+            else:
+                continue_choice = questionary.select(
+                    "What would you like to do next?",
+                    choices=[
+                        Choice(title="Scan another location", value="scan"),
+                        Choice(title=f"{Fore.YELLOW}Exit program{Style.RESET_ALL}", value="exit")
+                    ],
+                    style=questionary_style,
+                    qmark=f"{Fore.CYAN}?{Style.RESET_ALL}"
+                ).ask()
+            
+            if continue_choice != "scan":
+                print_status("Thanks for using Visio Temporary File Remover!", "success")
                 break
     finally:
-        init() # Ensure colorama is re-initialized if deinit was called elsewhere, or handle this better.
+        # Re-initialize colorama with proper settings if needed
+        init(autoreset=True, convert=True, strip=False, wrap=True)
+        # Ensure PowerShell compatibility
+        if IS_POWERSHELL:
+            # For PowerShell, use strip=True to avoid raw ANSI codes
+            init(autoreset=True, convert=True, strip=True, wrap=True)
+        elif platform.system() == 'Windows':
+            init(autoreset=True, convert=True, strip=False, wrap=True)
 
 if __name__ == "__main__":
     try:
@@ -471,5 +820,11 @@ if __name__ == "__main__":
         # import traceback
         # traceback.print_exc()
     finally:
-        import colorama
-        colorama.deinit() # type: ignore 
+        try:
+            import colorama
+            colorama.deinit() # type: ignore
+            # Re-init with safe settings for PowerShell
+            if IS_POWERSHELL:
+                init(autoreset=True, convert=True, strip=True, wrap=True)
+        except Exception:
+            pass # Ignore any errors when deinitializing

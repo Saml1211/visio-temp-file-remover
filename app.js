@@ -78,11 +78,11 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'web-ui', 'public')));
 
 // Serve the main page
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'views', 'index.html'));
+    res.sendFile(path.join(__dirname, 'web-ui', 'views', 'index.html'));
 });
 
 // Health check endpoint
@@ -147,12 +147,22 @@ app.post('/api/scan', (req, res) => {
     
     console.log(`[SCAN] Scanning directory: ${targetDir}`);
 
-    const scriptArgs = [
-        '-ScanPath', targetDir,
-        '-Patterns', ...safePatterns // Use validated patterns
-    ];
+    // Use -Command approach similar to the CLI tool for robust argument handling
+    const quotedScanScript = `'${SCAN_SCRIPT.replace(/'/g, "''")}'`; // Single quote script path, escape internal single quotes
+    const quotedTargetDir = `'${targetDir.replace(/'/g, "''")}'`;   // Single quote target dir, escape internal single quotes
+    
+    // Fix: Create a PowerShell array string for patterns instead of passing as separate arguments
+    // This matches how the CLI tool handles patterns
+    const patternsArray = "@(" + safePatterns.map(p => `"${p}"`).join(',') + ")";
+    
+    // This format is suitable for PowerShell's -Command execution context
+    const psCommand = `& ${quotedScanScript} -ScanPath ${quotedTargetDir} -Patterns ${patternsArray} -AsJson`;
 
-    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCAN_SCRIPT, ...scriptArgs], 
+    execFile('powershell', [
+        '-NoProfile', 
+        '-ExecutionPolicy', 'Bypass', 
+        '-Command', psCommand 
+        ], 
         { 
             maxBuffer: MAX_BUFFER_SIZE, 
             timeout: SCRIPT_TIMEOUT 
@@ -229,15 +239,24 @@ app.post('/api/delete', (req, res) => {
 
     console.log(`[DELETE] Attempting to delete ${filesToDelete.length} files.`);
 
-    const scriptArgs = [
-        '-FilePaths', ...filesToDelete // Spread file paths as individual arguments
-    ];
+    // Use -Command approach similar to the CLI tool for robust argument handling
+    const quotedRemoveScript = `'${REMOVE_SCRIPT.replace(/'/g, "''")}'`; // Single quote script path, escape internal single quotes
+    
+    // Create a PowerShell array string for file paths similar to how patterns are handled in the scan API
+    const filePathsArray = "@(" + filesToDelete.map(file => `'${file.replace(/'/g, "''")}'`).join(',') + ")";
+    // This format is suitable for PowerShell's -Command execution context
 
-    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', REMOVE_SCRIPT, ...scriptArgs], 
+    const psCommand = `& ${quotedRemoveScript} -FilePaths ${filePathsArray} -AsJson`;
+
+    execFile('powershell', [
+        '-NoProfile', 
+        '-ExecutionPolicy', 'Bypass', 
+        '-Command', psCommand 
+        ], 
         { 
             maxBuffer: MAX_BUFFER_SIZE, 
             timeout: SCRIPT_TIMEOUT 
-        }, 
+        },
         (error, stdout, stderr) => {
             // Handle timeout specifically
             if (error && error.killed) {
