@@ -32,11 +32,11 @@ The CLI interface prioritizes:
 
 ### Web Interface
 The web interface focuses on:
-- **Accessibility**: Easy to use for non-technical users
-- **Clarity**: Visual representation of files for easier identification
-- **Safety**: Clear confirmation before file deletion
-- **Collaboration**: Suitable for teams working in shared directories
-- **Simplicity**: Minimal setup and configuration required
+- **Accessibility**: Easy to use for non-technical users, with improved visual clarity and responsive design for various screen sizes.
+- **Clarity**: Visual representation of files for easier identification, enhanced by a polished and intuitive user interface with consistent styling and dark mode support.
+- **Safety**: Clear confirmation before file deletion.
+- **Collaboration**: Suitable for teams working in shared directories.
+- **Simplicity**: Minimal setup and configuration required.
 
 ## User Workflows
 

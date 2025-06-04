@@ -412,7 +412,8 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
         "-Command", ps_command
     ]
 
-    print_status(f"Scanning {dir_str} with {len(safe_patterns)} patterns...", "working")
+    # Consolidate scanning messages into one clear message
+    print_status(f"Scanning {dir_str} for Visio temporary files...", "working")
     show_spinner(1, "Starting scan")
     
     try:
@@ -446,19 +447,35 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
         try:
             result_data = json.loads(completed.stdout.strip())
             
+            # Handle both single objects and arrays
+            if isinstance(result_data, dict):
+                # Single file found - convert to array
+                result_data = [result_data]
+            elif isinstance(result_data, list):
+                # Array of files (or empty array)
+                pass
+            else:
+                print_status("Unexpected PowerShell script output format.", "error")
+                return []
+            
             # If we got an empty array, it means no files were found
-            if isinstance(result_data, list) and len(result_data) == 0:
+            if len(result_data) == 0:
                 print_status("No matching temporary Visio files found in the specified location.", "info")
                 return []
                 
+            # Process the found files
             found_files = [Path(item['FullName']) for item in result_data if isinstance(item, dict) and 'FullName' in item]
-            print_status(f"Found {len(found_files)} temporary Visio files.", "success")
-            return sorted(found_files)
+            if found_files:
+                print_status(f"Found {len(found_files)} temporary Visio files.", "success")
+                return sorted(found_files)
+            else:
+                print_status("No matching temporary Visio files found in the specified location.", "info")
+                return []
         except json.JSONDecodeError as e:
             print_status(f"Error parsing scan JSON: {e}", "error")
             print(f"{Fore.MAGENTA}Raw STDOUT:\n{completed.stdout.strip()}{Style.RESET_ALL}")
             
-            # Despite the JSON error, let's check if we need to show 'no files found' message
+            # Check if we need to show 'no files found' message (but only once)
             if "No matching" in completed.stdout or completed.stdout.strip() == "[]":
                 print_status("No matching temporary Visio files found in the specified location.", "info")
             
@@ -740,8 +757,6 @@ def delete_files(selected_paths: list[Path]):
 
 def main():
     print(BANNER)
-    print(f"{Fore.CYAN}This utility helps you find and remove temporary Visio files.{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}Type 'help' at any prompt for more information.{Style.RESET_ALL}\n")
 
     # Validate environment before starting
     if not validate_powershell_available():
@@ -766,11 +781,12 @@ def main():
                 print_status("Exiting program.", "info")
                 break
 
-            print_status(f"Scanning {Style.BRIGHT}{target_directory}{Style.NORMAL} for Visio temporary files...", "working")
+            # Remove redundant scanning message - let find_temp_files handle all status messages
             found_temp_files = find_temp_files(target_directory, TEMP_PATTERNS)
             
             if not found_temp_files:
-                print_status("No matching temporary Visio files found in the specified location.", "info")
+                # Remove duplicate "no files found" message since find_temp_files already handles this
+                pass
             else:
                 files_to_delete = select_files_for_deletion(found_temp_files, target_directory)
                 if files_to_delete:

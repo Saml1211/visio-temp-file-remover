@@ -90,6 +90,11 @@ Both interfaces execute PowerShell scripts as subprocesses, passing parameters a
 - **Implementation**: PowerShell scripts output JSON, which is parsed by the interfaces
 - **Benefit**: Type-safe data transfer with object serialization/deserialization
 
+### Web UI Styling and Interaction
+- **Approach**: Modern, responsive design with clear visual hierarchy, consistent spacing, and intuitive interactive elements.
+- **Key Features**: Dark mode support, client-side JavaScript for dynamic updates, and CSS for theming and layout.
+- **Logging**: The Node.js backend for the web UI utilizes `chalk` for colored console output, aiding in development and debugging by mimicking the CLI's enhanced logging readability.
+
 ### Security Focus
 - **Implementation**: Input validation at multiple levels:
   - Interface-level validation

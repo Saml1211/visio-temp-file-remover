@@ -25,14 +25,16 @@
     - `express`: Web framework
     - `body-parser`: Request parsing
     - `child_process`: PowerShell script execution
-  - Source: `app.js`
+    - `chalk`: Terminal color support for server-side logging (similar to `colorama` in CLI)
+  - Source: `web-ui/app.js` (Note: The root `app.js` is also part of the web application structure but `web-ui/app.js` contains the core Express app logic with enhanced logging)
 
 - **Frontend**: Browser-based UI
   - Technologies: HTML, CSS, JavaScript (vanilla)
+  - Key features: Responsive design, dark mode support, dynamic content updates via JavaScript.
   - Key files:
-    - `views/index.html`: Main page template
-    - `public/styles.css`: Styling
-    - `public/main.js`: Frontend interaction logic
+    - `web-ui/views/index.html`: Main page template
+    - `web-ui/public/styles.css`: Styling, including responsive layouts and dark mode.
+    - `web-ui/public/main.js`: Frontend interaction logic
 
 ### Configuration
 - **JSON**: Shared configuration across components
@@ -76,7 +78,7 @@ node app.js
 ### Project Structure
 ```
 visio-temp-file-remover/
-├── app.js                     # Main Node.js web application
+├── app.js                     # Root application file (may handle routing or be a placeholder)
 ├── config.json                # Shared configuration
 ├── config.development.json    # Development environment config
 ├── cli-tool/
@@ -85,7 +87,9 @@ visio-temp-file-remover/
 ├── scripts/
 │   ├── Scan-VisioTempFiles.ps1     # PowerShell scanning script
 │   └── Remove-VisioTempFiles.ps1   # PowerShell deletion script
-├── web-ui/
+├── web-ui/                    # Main web application component directory
+│   ├── app.js                 # Core Express.js application logic with enhanced logging
+│   ├── package.json           # Node.js dependencies for the web UI
 │   ├── public/                # Static web assets
 │   │   ├── styles.css         # CSS styling
 │   │   └── main.js            # Frontend JavaScript

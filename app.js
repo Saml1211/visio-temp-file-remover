@@ -131,7 +131,7 @@ app.post('/api/scan', (req, res) => {
         });
     }
     
-    // Validate patterns - ensure they're safe
+    // Validate patterns - ensure they're safe (matching CLI tool validation)
     const safePatterns = config.temp_file_patterns.filter(pattern => 
         // Only allow safe characters in patterns (alphanumeric, wildcards, and common Visio extensions)
         /^[~$*.A-Za-z0-9\-_]+$/.test(pattern)
@@ -147,15 +147,14 @@ app.post('/api/scan', (req, res) => {
     
     console.log(`[SCAN] Scanning directory: ${targetDir}`);
 
-    // Use -Command approach similar to the CLI tool for robust argument handling
+    // Use -Command approach matching the CLI tool for robust argument handling
     const quotedScanScript = `'${SCAN_SCRIPT.replace(/'/g, "''")}'`; // Single quote script path, escape internal single quotes
     const quotedTargetDir = `'${targetDir.replace(/'/g, "''")}'`;   // Single quote target dir, escape internal single quotes
     
-    // Fix: Create a PowerShell array string for patterns instead of passing as separate arguments
-    // This matches how the CLI tool handles patterns
+    // Create a PowerShell array string for patterns matching CLI tool approach
     const patternsArray = "@(" + safePatterns.map(p => `"${p}"`).join(',') + ")";
     
-    // This format is suitable for PowerShell's -Command execution context
+    // This format matches the CLI tool's command construction
     const psCommand = `& ${quotedScanScript} -ScanPath ${quotedTargetDir} -Patterns ${patternsArray} -AsJson`;
 
     execFile('powershell', [
@@ -186,24 +185,66 @@ app.post('/api/scan', (req, res) => {
                 });
             }
 
-            if (stderr && !stderr.toLowerCase().startsWith('warning:')) { // Log significant stderr
+            // Handle stderr warnings (matching CLI tool behavior)
+            if (stderr && !stderr.toLowerCase().trim().startsWith('warning:')) {
                 console.warn(`[SCAN SCRIPT STDERR] ${stderr}`);
             }
 
+            // Check for empty output (matching CLI tool)
+            if (!stdout || stdout.trim() === "") {
+                console.error("[SCAN] PowerShell script returned no output.");
+                return res.status(500).json({
+                    error: "No output from scan script",
+                    details: "PowerShell script executed but returned no output"
+                });
+            }
+
             try {
-                // PowerShell script outputs JSON directly
-                const filesData = JSON.parse(stdout.trim() || '[]'); 
-                const fileArray = Array.isArray(filesData) ? filesData : []; // Ensure it's an array
+                // Robust JSON parsing matching CLI tool logic
+                const resultData = JSON.parse(stdout.trim());
                 
-                console.log(`[SCAN] Found ${fileArray.length} files matching the pattern.`);
+                let fileArray;
+                // Handle both single objects and arrays (critical CLI tool logic)
+                if (Array.isArray(resultData)) {
+                    fileArray = resultData;
+                } else if (typeof resultData === 'object' && resultData !== null) {
+                    // Single file found - convert to array (matches CLI tool)
+                    fileArray = [resultData];
+                } else {
+                    console.error("[SCAN PARSE ERROR] Unexpected PowerShell script output format.");
+                    return res.status(500).json({
+                        error: "Unexpected output format",
+                        details: "PowerShell script returned unexpected data format"
+                    });
+                }
+                
+                // Process the found files (matching CLI tool validation)
+                const foundFiles = fileArray.filter(item => 
+                    typeof item === 'object' && 
+                    item !== null && 
+                    'FullName' in item
+                );
+                
+                console.log(`[SCAN] Found ${foundFiles.length} files matching the pattern.`);
                 res.json({
-                    files: fileArray, // Script now returns objects with Name, FullName, Directory etc.
-                    message: `Found ${fileArray.length} file(s)`,
+                    files: foundFiles,
+                    message: `Found ${foundFiles.length} file(s)`,
                     scannedDirectory: targetDir
                 });
             } catch (e) {
                 console.error(`[SCAN PARSE ERROR] Error parsing PowerShell output: ${e.message}`);
                 console.error(`[SCAN RAW STDOUT] ${stdout.substring(0, 500)}`);
+                
+                // Check if we need to show 'no files found' message (matching CLI tool)
+                if (stdout.includes("No matching") || stdout.trim() === "[]") {
+                    console.log("[SCAN] No matching temporary Visio files found.");
+                    return res.json({
+                        files: [],
+                        message: "No temporary Visio files found",
+                        scannedDirectory: targetDir
+                    });
+                }
+                
                 res.status(500).json({
                     error: `Failed to parse file list: ${e.message}`,
                     details: 'The PowerShell scan script executed but returned invalid JSON.',
@@ -239,14 +280,34 @@ app.post('/api/delete', (req, res) => {
 
     console.log(`[DELETE] Attempting to delete ${filesToDelete.length} files.`);
 
-    // Use -Command approach similar to the CLI tool for robust argument handling
-    const quotedRemoveScript = `'${REMOVE_SCRIPT.replace(/'/g, "''")}'`; // Single quote script path, escape internal single quotes
+    // Use direct PowerShell approach matching the CLI tool (which works successfully)
+    // Escape paths for PowerShell - escape single quotes by doubling them and wrap in single quotes
+    const quotedPaths = filesToDelete.map(file => `'${file.replace(/'/g, "''")}'`);
     
-    // Create a PowerShell array string for file paths similar to how patterns are handled in the scan API
-    const filePathsArray = "@(" + filesToDelete.map(file => `'${file.replace(/'/g, "''")}'`).join(',') + ")";
-    // This format is suitable for PowerShell's -Command execution context
-
-    const psCommand = `& ${quotedRemoveScript} -FilePaths ${filePathsArray} -AsJson`;
+    // Build PowerShell command matching CLI tool's successful approach
+    const psCommand = `
+    $filesToDelete = @(${quotedPaths.join(',')})
+    $results = @{
+        deleted = @()
+        failed = @()
+    }
+    
+    foreach ($file in $filesToDelete) {
+        try {
+            if (Test-Path -LiteralPath $file -PathType Leaf) {
+                Remove-Item -LiteralPath $file -Force -ErrorAction Stop
+                $results.deleted += $file
+            } else {
+                $results.failed += @{ Path = $file; Error = "File not found or is not a regular file." }
+            }
+        } catch {
+            $results.failed += @{ Path = $file; Error = $_.Exception.Message }
+        }
+    }
+    
+    # Return results as JSON for parsing
+    $results | ConvertTo-Json -Depth 3
+    `;
 
     execFile('powershell', [
         '-NoProfile', 
@@ -270,21 +331,10 @@ app.post('/api/delete', (req, res) => {
             if (error) {
                 console.error(`[DELETE SCRIPT ERROR] Error deleting files: ${error.message}`);
                 console.error(`[DELETE SCRIPT STDERR] ${stderr}`);
-                // Even on error, the script might have partial results in stdout (JSON)
-                try {
-                    const results = JSON.parse(stdout.trim() || '{}');
-                    return res.status(500).json({
-                        error: error.message,
-                        details: stderr || 'Error executing PowerShell delete script',
-                        deleted: results.deleted || [],
-                        failed: results.failed || [{Path: 'Multiple files', Error: stderr}]
-                    });
-                } catch (parseError) {
-                     return res.status(500).json({
-                        error: error.message,
-                        details: stderr || 'Error executing PowerShell delete script (and failed to parse partial results)'
-                    });
-                }
+                return res.status(500).json({
+                    error: error.message,
+                    details: stderr || 'Error executing PowerShell delete command'
+                });
             }
 
             if (stderr) { // Log any stderr for delete operations
@@ -302,9 +352,9 @@ app.post('/api/delete', (req, res) => {
                 if (numFailed > 0 && numDeleted === 0 && filesToDelete.length > 0) {
                      // All failed, this is more like an error or partial failure
                      return res.status(207).json({ // Multi-Status
-                        partialSuccess: false, // Or true if some succeeded
+                        partialSuccess: false,
                         message: `Attempted to delete ${filesToDelete.length} file(s). ${numDeleted} succeeded, ${numFailed} failed.`,
-                        details: stderr || 'Some files may not have been deleted successfully.',
+                        details: 'Some files may not have been deleted successfully.',
                         deleted: results.deleted || [],
                         failed: results.failed || [],
                         filesAttempted: filesToDelete.length
@@ -313,7 +363,7 @@ app.post('/api/delete', (req, res) => {
 
                 res.json({
                     success: numFailed === 0,
-                    message: `${numDeleted} file(s) deleted. ${numFailed} failed.`,
+                    message: `${numDeleted} file(s) deleted successfully.${numFailed > 0 ? ` ${numFailed} failed.` : ''}`,
                     deleted: results.deleted || [],
                     failed: results.failed || []
                 });
@@ -322,7 +372,7 @@ app.post('/api/delete', (req, res) => {
                 console.error(`[DELETE RAW STDOUT] ${stdout.substring(0, 500)}`);
                 res.status(500).json({
                     error: `Failed to parse delete results: ${e.message}`,
-                    details: 'The PowerShell delete script may have run, but its output was unreadable.',
+                    details: 'The PowerShell delete command may have run, but its output was unreadable.',
                     rawOutput: stdout.substring(0, 200)
                 });
             }
