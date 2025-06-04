@@ -1,412 +1,340 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
-const fs = require('fs'); // For reading config.json
-const { execFile } = require('child_process'); // Using execFile for better arg handling
+const fs = require('fs');
+const { exec } = require('child_process');
+const chalk = require('chalk');
 
-// Constants
-const SCRIPT_TIMEOUT = 30000; // 30 seconds timeout for scripts
-const MAX_BUFFER_SIZE = 1024 * 5024; // 5MB buffer
+// --- Logger Utility ---
+const LOG_LEVELS = {
+  INFO: 'INFO',
+  SUCCESS: 'SUCCESS',
+  WARN: 'WARN',
+  ERROR: 'ERROR',
+  DEBUG: 'DEBUG', // For developers
+  DETAIL: 'DETAIL', // For verbose operational steps
+};
 
-// Load Configuration with environment support
-function loadConfig() {
-    // Determine environment - default to 'development' if not specified
-    const env = process.env.NODE_ENV || 'development';
-    console.log(`[CONFIG] Loading configuration for environment: ${env}`);
-    
-    // Try to load environment-specific config file first
-    const envConfigPath = path.join(__dirname, `config.${env}.json`);
-    const defaultConfigPath = path.join(__dirname, 'config.json');
-    
-    let configPath = fs.existsSync(envConfigPath) ? envConfigPath : defaultConfigPath;
-    console.log(`[CONFIG] Using config file: ${configPath}`);
-    
-    try {
-        const configFile = fs.readFileSync(configPath, 'utf-8');
-        const configData = JSON.parse(configFile);
-        
-        // Apply environment variable overrides if present
-        if (process.env.DEFAULT_SCAN_PATH) {
-            console.log('[CONFIG] Overriding default_scan_path from environment variable');
-            configData.default_scan_path = process.env.DEFAULT_SCAN_PATH;
-        }
-        
-        if (process.env.POWERSHELL_SCRIPTS_PATH) {
-            console.log('[CONFIG] Overriding powershell_scripts_path from environment variable');
-            configData.powershell_scripts_path = process.env.POWERSHELL_SCRIPTS_PATH;
-        }
-        
-        // Validate configuration
-        if (!configData.powershell_scripts_path || !configData.temp_file_patterns) {
-            throw new Error('Essential configuration (powershell_scripts_path, temp_file_patterns) missing.');
-        }
-        
-        return configData;
-    } catch (error) {
-        console.error('[CONFIG ERROR] Failed to load or parse config:', error.message);
-        process.exit(1); // Exit if config is invalid
-    }
+const CATEGORIES = {
+  CONFIG: 'CONFIG',
+  SERVER: 'SERVER',
+  SCAN: 'SCAN',
+  DELETE: 'DELETE',
+  POWERSHELL: 'PS_CMD',
+  PARSING: 'PARSING',
+  HTTP: 'HTTP',
+  GENERAL: 'GENERAL',
+};
+
+const ICONS = {
+  INFO: 'ℹ️',
+  SUCCESS: '✅',
+  WARN: '⚠️',
+  ERROR: '❌',
+  DEBUG: '⚙️',
+  DETAIL: '🔹', // Using DETAIL for "working" or detailed steps
+  POWERSHELL: '>',
+};
+
+function getTimestamp() {
+  return new Date().toLocaleTimeString();
 }
 
-// Load the configuration
-const config = loadConfig();
+function log(level, category, message, ...args) {
+  const timestamp = chalk.dim(`[${getTimestamp()}]`);
+  let coloredMessage = message;
+  let icon = '';
+  let categoryString = `[${category.padEnd(7, ' ')}]`;
 
-const SCRIPTS_PATH = path.join(__dirname, config.powershell_scripts_path);
-const SCAN_SCRIPT = path.join(SCRIPTS_PATH, 'Scan-VisioTempFiles.ps1');
-const REMOVE_SCRIPT = path.join(SCRIPTS_PATH, 'Remove-VisioTempFiles.ps1');
+  switch (level) {
+    case LOG_LEVELS.INFO:
+      icon = ICONS.INFO;
+      coloredMessage = chalk.blue(message);
+      categoryString = chalk.bold.blue(categoryString);
+      break;
+    case LOG_LEVELS.SUCCESS:
+      icon = ICONS.SUCCESS;
+      coloredMessage = chalk.bold.green(message);
+      categoryString = chalk.bold.green(categoryString);
+      break;
+    case LOG_LEVELS.WARN:
+      icon = ICONS.WARN;
+      coloredMessage = chalk.yellow(message);
+      categoryString = chalk.bold.yellow(categoryString);
+      break;
+    case LOG_LEVELS.ERROR:
+      icon = ICONS.ERROR;
+      coloredMessage = chalk.bold.red(message);
+      categoryString = chalk.bold.red(categoryString);
+      break;
+    case LOG_LEVELS.DEBUG:
+      icon = ICONS.DEBUG;
+      coloredMessage = chalk.dim.cyan(message);
+      categoryString = chalk.bold.cyan(categoryString);
+      break;
+    case LOG_LEVELS.DETAIL:
+      icon = ICONS.DETAIL;
+      coloredMessage = chalk.dim(message); // Keep details subtle
+      // Category color for DETAIL will depend on the category itself
+      break;
+    default:
+      icon = '';
+  }
+  
+  // Specific category styling overrides/enhancements
+  switch (category) {
+    case CATEGORIES.CONFIG:
+      categoryString = chalk.bold.blue(categoryString);
+      if (level === LOG_LEVELS.DETAIL) coloredMessage = chalk.dim.blue(message);
+      break;
+    case CATEGORIES.SERVER:
+      categoryString = chalk.bold.green(categoryString);
+      if (level === LOG_LEVELS.INFO) coloredMessage = chalk.blue(message); // Server info can be blue
+      if (level === LOG_LEVELS.SUCCESS) coloredMessage = chalk.bold.green(message);
+      break;
+    case CATEGORIES.SCAN:
+      categoryString = chalk.bold.yellow(categoryString);
+      if (level === LOG_LEVELS.DETAIL) coloredMessage = chalk.dim.yellow(message);
+      else if (level !== LOG_LEVELS.WARN && level !== LOG_LEVELS.ERROR) coloredMessage = chalk.yellow(message);
+      break;
+    case CATEGORIES.DELETE:
+      categoryString = chalk.bold.magenta(categoryString);
+      if (level === LOG_LEVELS.DETAIL) coloredMessage = chalk.dim.magenta(message);
+      else if (level !== LOG_LEVELS.WARN && level !== LOG_LEVELS.ERROR) coloredMessage = chalk.magenta(message);
+      break;
+    case CATEGORIES.POWERSHELL:
+      icon = ICONS.POWERSHELL; // Ensure PS icon is always used for this category
+      categoryString = chalk.bold.cyan(categoryString);
+      coloredMessage = chalk.dim.cyan(message); // PS commands are always details
+      break;
+    case CATEGORIES.PARSING:
+      categoryString = chalk.bold.yellow(categoryString); // Often associated with warnings or errors
+      // Keep message color as per level (e.g. red for error)
+      break;
+    case CATEGORIES.HTTP:
+      categoryString = chalk.bold.cyan(categoryString);
+      if (level === LOG_LEVELS.DETAIL) coloredMessage = chalk.dim.cyan(message);
+      else if (level !== LOG_LEVELS.WARN && level !== LOG_LEVELS.ERROR) coloredMessage = chalk.cyan(message);
+      break;
+    default:
+      // For GENERAL or unstyled categories, ensure the level color applies if not detailed
+      if (level !== LOG_LEVELS.DETAIL) {
+         // Re-apply level default color if not handled by category specific
+        switch (level) {
+            case LOG_LEVELS.INFO: coloredMessage = chalk.blue(message); break;
+            case LOG_LEVELS.SUCCESS: coloredMessage = chalk.bold.green(message); break;
+            case LOG_LEVELS.WARN: coloredMessage = chalk.yellow(message); break;
+            case LOG_LEVELS.ERROR: coloredMessage = chalk.bold.red(message); break;
+            case LOG_LEVELS.DEBUG: coloredMessage = chalk.dim.cyan(message); break;
+        }
+      }
+      categoryString = chalk.dim(categoryString);
+  }
 
-// Input validation helper functions
-const isValidDirectory = (dir) => {
-    try {
-        return fs.existsSync(dir) && fs.statSync(dir).isDirectory();
-    } catch (error) {
-        return false;
+  const finalMessage = `${timestamp} ${icon} ${categoryString} ${coloredMessage}`;
+  
+  const formattedArgs = args.map(arg => {
+    if (typeof arg === 'object') {
+      try {
+        return chalk.dim(`\n${JSON.stringify(arg, null, 2)}`);
+      } catch (e) {
+        return chalk.dim(`\n${String(arg)}`);
+      }
     }
-};
+    // Apply the base color of the message to its arguments, if not an object
+    // This logic might need to be smarter if args need their own colors
+    if (level === LOG_LEVELS.ERROR) return chalk.bold.red(String(arg));
+    if (level === LOG_LEVELS.WARN) return chalk.yellow(String(arg));
+    return chalk.dim(String(arg)); // Default for other args
+  });
 
-const isValidFilePath = (filePath) => {
-    try {
-        // Check if the path exists, is a file, and is accessible
-        return fs.existsSync(filePath) && fs.statSync(filePath).isFile();
-    } catch (error) {
-        return false;
-    }
-};
+  if (level === LOG_LEVELS.ERROR) {
+    console.error(finalMessage, ...formattedArgs);
+  } else if (level === LOG_LEVELS.WARN) {
+    console.warn(finalMessage, ...formattedArgs);
+  } else {
+    console.log(finalMessage, ...formattedArgs);
+  }
+}
+
+function logSeparator(character = '─', length = 60) {
+  console.log(chalk.dim.white(character.repeat(length)));
+}
+
+// --- End Logger Utility ---
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const DEFAULT_SCAN_DIR_DISPLAY = 'Z:\\\\ENGINEERING TEMPLATES\\\\VISIO SHAPES 2025'; // For display
 
 // Middleware
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'web-ui', 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve the main page
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'web-ui', 'views', 'index.html'));
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    const scriptsExist = fs.existsSync(SCAN_SCRIPT) && fs.existsSync(REMOVE_SCRIPT);
-    
-    // Check if PowerShell is available
-    execFile('powershell', ['-Command', 'echo "PowerShell Test"'], 
-        { timeout: 5000 }, (error) => {
-        const health = {
-            status: !error && scriptsExist ? 'UP' : 'DOWN',
-            uptime: process.uptime(),
-            timestamp: new Date().toISOString(),
-            environment: process.env.NODE_ENV || 'development',
-            checks: [
-                {
-                    name: 'powershell',
-                    status: !error ? 'UP' : 'DOWN'
-                },
-                {
-                    name: 'scripts',
-                    status: scriptsExist ? 'UP' : 'DOWN',
-                    details: {
-                        scan: fs.existsSync(SCAN_SCRIPT),
-                        remove: fs.existsSync(REMOVE_SCRIPT)
-                    }
-                }
-            ]
-        };
-        
-        const healthStatus = health.status === 'UP' ? 200 : 503;
-        res.status(healthStatus).json(health);
-    });
+  res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
 // API to scan for files
 app.post('/api/scan', (req, res) => {
-    const targetDir = req.body.directory || config.default_scan_path || process.cwd(); // Fallback to config or CWD
-    
-    // Validate directory
-    if (!isValidDirectory(targetDir)) {
-        console.error(`[SCAN VALIDATION ERROR] Invalid directory: ${targetDir}`);
-        return res.status(400).json({
-            error: "Invalid directory",
-            details: "The specified directory does not exist or is not accessible"
-        });
+  const targetDir = req.body.directory || DEFAULT_SCAN_DIR_DISPLAY;
+  
+  log(LOG_LEVELS.INFO, CATEGORIES.SCAN, `Request to scan directory: ${targetDir}`);
+  
+  const escapedPath = targetDir.replace(/'/g, "''");
+  const powershellCommand = `Get-ChildItem -Path '${escapedPath}' -Recurse -File -Force -Include "~\`$\`$*.~vssx","~\`$\`$*.~vsdx","~\`$\`$*.~vstx","~\`$\`$*.~vsdm","~\`$\`$*.~vsd" | Select-Object -Property FullName,Name | ConvertTo-Json`;
+  
+  log(LOG_LEVELS.DETAIL, CATEGORIES.POWERSHELL, `Executing: ${powershellCommand}`);
+  
+  exec(`powershell -Command "${powershellCommand}"`, { maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+    if (error) {
+      log(LOG_LEVELS.ERROR, CATEGORIES.SCAN, `Error scanning files: ${error.message}`);
+      return res.status(500).json({ 
+        error: error.message,
+        details: 'Error executing PowerShell command to scan for files'
+      });
     }
     
-    // Validate patterns - ensure they're safe (matching CLI tool validation)
-    const safePatterns = config.temp_file_patterns.filter(pattern => 
-        // Only allow safe characters in patterns (alphanumeric, wildcards, and common Visio extensions)
-        /^[~$*.A-Za-z0-9\-_]+$/.test(pattern)
-    );
-    
-    if (safePatterns.length === 0) {
-        console.error(`[SCAN VALIDATION ERROR] No valid patterns found in configuration`);
-        return res.status(400).json({
-            error: "Invalid patterns",
-            details: "No valid search patterns found in configuration"
-        });
+    if (stderr && stderr.trim() !== '') {
+      log(LOG_LEVELS.WARN, CATEGORIES.SCAN, `Warning during file scan: ${stderr.trim()}`);
     }
     
-    console.log(`[SCAN] Scanning directory: ${targetDir}`);
-
-    // Use -Command approach matching the CLI tool for robust argument handling
-    const quotedScanScript = `'${SCAN_SCRIPT.replace(/'/g, "''")}'`; // Single quote script path, escape internal single quotes
-    const quotedTargetDir = `'${targetDir.replace(/'/g, "''")}'`;   // Single quote target dir, escape internal single quotes
+    if (!stdout || stdout.trim() === '') {
+      log(LOG_LEVELS.INFO, CATEGORIES.SCAN, `No files found in directory: ${targetDir}`);
+      return res.json({ files: [], message: 'No matching files found' });
+    }
     
-    // Create a PowerShell array string for patterns matching CLI tool approach
-    const patternsArray = "@(" + safePatterns.map(p => `"${p}"`).join(',') + ")";
-    
-    // This format matches the CLI tool's command construction
-    const psCommand = `& ${quotedScanScript} -ScanPath ${quotedTargetDir} -Patterns ${patternsArray} -AsJson`;
-
-    execFile('powershell', [
-        '-NoProfile', 
-        '-ExecutionPolicy', 'Bypass', 
-        '-Command', psCommand 
-        ], 
-        { 
-            maxBuffer: MAX_BUFFER_SIZE, 
-            timeout: SCRIPT_TIMEOUT 
-        }, 
-        (error, stdout, stderr) => {
-            // Handle timeout specifically
-            if (error && error.killed) {
-                console.error(`[SCAN TIMEOUT] Script execution timed out after ${SCRIPT_TIMEOUT/1000} seconds`);
-                return res.status(504).json({
-                    error: "Operation timed out",
-                    details: "The scan operation took too long and was aborted"
-                });
-            }
-            
-            if (error) {
-                console.error(`[SCAN SCRIPT ERROR] Error scanning files: ${error.message}`);
-                console.error(`[SCAN SCRIPT STDERR] ${stderr}`);
-                return res.status(500).json({
-                    error: error.message,
-                    details: stderr || 'Error executing PowerShell scan script'
-                });
-            }
-
-            // Handle stderr warnings (matching CLI tool behavior)
-            if (stderr && !stderr.toLowerCase().trim().startsWith('warning:')) {
-                console.warn(`[SCAN SCRIPT STDERR] ${stderr}`);
-            }
-
-            // Check for empty output (matching CLI tool)
-            if (!stdout || stdout.trim() === "") {
-                console.error("[SCAN] PowerShell script returned no output.");
-                return res.status(500).json({
-                    error: "No output from scan script",
-                    details: "PowerShell script executed but returned no output"
-                });
-            }
-
-            try {
-                // Robust JSON parsing matching CLI tool logic
-                const resultData = JSON.parse(stdout.trim());
-                
-                let fileArray;
-                // Handle both single objects and arrays (critical CLI tool logic)
-                if (Array.isArray(resultData)) {
-                    fileArray = resultData;
-                } else if (typeof resultData === 'object' && resultData !== null) {
-                    // Single file found - convert to array (matches CLI tool)
-                    fileArray = [resultData];
-                } else {
-                    console.error("[SCAN PARSE ERROR] Unexpected PowerShell script output format.");
-                    return res.status(500).json({
-                        error: "Unexpected output format",
-                        details: "PowerShell script returned unexpected data format"
-                    });
-                }
-                
-                // Process the found files (matching CLI tool validation)
-                const foundFiles = fileArray.filter(item => 
-                    typeof item === 'object' && 
-                    item !== null && 
-                    'FullName' in item
-                );
-                
-                console.log(`[SCAN] Found ${foundFiles.length} files matching the pattern.`);
-                res.json({
-                    files: foundFiles,
-                    message: `Found ${foundFiles.length} file(s)`,
-                    scannedDirectory: targetDir
-                });
-            } catch (e) {
-                console.error(`[SCAN PARSE ERROR] Error parsing PowerShell output: ${e.message}`);
-                console.error(`[SCAN RAW STDOUT] ${stdout.substring(0, 500)}`);
-                
-                // Check if we need to show 'no files found' message (matching CLI tool)
-                if (stdout.includes("No matching") || stdout.trim() === "[]") {
-                    console.log("[SCAN] No matching temporary Visio files found.");
-                    return res.json({
-                        files: [],
-                        message: "No temporary Visio files found",
-                        scannedDirectory: targetDir
-                    });
-                }
-                
-                res.status(500).json({
-                    error: `Failed to parse file list: ${e.message}`,
-                    details: 'The PowerShell scan script executed but returned invalid JSON.',
-                    rawOutput: stdout.substring(0, 200)
-                });
-            }
+    try {
+      log(LOG_LEVELS.DEBUG, CATEGORIES.POWERSHELL, `Raw output (first 200 chars): ${stdout.substring(0, 200)}${stdout.length > 200 ? '...' : ''}`);
+      const files = JSON.parse(stdout);
+      
+      if (!files || (files && Object.keys(files).length === 0)) {
+        log(LOG_LEVELS.INFO, CATEGORIES.SCAN, `No files found after parsing JSON.`);
+        return res.json({ files: [], message: 'No matching files found' });
+      }
+      
+      const fileArray = Array.isArray(files) ? files : [files];
+      
+      const processedFiles = fileArray.map(file => {
+        if (!file.Name && file.FullName) {
+          file.Name = file.FullName.split('\\\\').pop().split('/').pop();
         }
-    );
+        return file;
+      });
+      
+      log(LOG_LEVELS.SUCCESS, CATEGORIES.SCAN, `Found ${processedFiles.length} files matching the pattern.`);
+      res.json({ 
+        files: processedFiles,
+        message: `Found ${processedFiles.length} file(s)`,
+        scannedDirectory: targetDir
+      });
+    } catch (e) {
+      log(LOG_LEVELS.ERROR, CATEGORIES.PARSING, `Error parsing PowerShell output: ${e.message}`);
+      log(LOG_LEVELS.DEBUG, CATEGORIES.POWERSHELL, `Raw output on parsing error (first 200 chars): ${stdout.substring(0, 200)}${stdout.length > 200 ? '...' : ''}`);
+      res.status(500).json({ 
+        error: `Failed to parse file list: ${e.message}`, 
+        details: 'The PowerShell command executed successfully but returned invalid JSON',
+        files: [] 
+      });
+    }
+  });
 });
 
 // API to delete files
 app.post('/api/delete', (req, res) => {
-    const filesToDelete = req.body.files; // Expecting an array of full file paths
-
-    if (!filesToDelete || !Array.isArray(filesToDelete) || filesToDelete.length === 0) {
-        console.warn(`[DELETE] No files specified for deletion.`);
-        return res.status(400).json({
-            error: 'No files specified for deletion',
-            details: 'Request must include a "files" array with full file paths.'
-        });
-    }
-
-    // Validate all file paths
-    const invalidFiles = filesToDelete.filter(file => !isValidFilePath(file));
-    if (invalidFiles.length > 0) {
-        console.error(`[DELETE VALIDATION ERROR] Invalid files: ${invalidFiles.join(', ')}`);
-        return res.status(400).json({
-            error: 'Invalid file paths',
-            details: 'One or more specified files do not exist or are not accessible',
-            invalidFiles: invalidFiles
-        });
-    }
-
-    console.log(`[DELETE] Attempting to delete ${filesToDelete.length} files.`);
-
-    // Use direct PowerShell approach matching the CLI tool (which works successfully)
-    // Escape paths for PowerShell - escape single quotes by doubling them and wrap in single quotes
-    const quotedPaths = filesToDelete.map(file => `'${file.replace(/'/g, "''")}'`);
-    
-    // Build PowerShell command matching CLI tool's successful approach
-    const psCommand = `
-    $filesToDelete = @(${quotedPaths.join(',')})
-    $results = @{
-        deleted = @()
-        failed = @()
-    }
-    
-    foreach ($file in $filesToDelete) {
-        try {
-            if (Test-Path -LiteralPath $file -PathType Leaf) {
-                Remove-Item -LiteralPath $file -Force -ErrorAction Stop
-                $results.deleted += $file
-            } else {
-                $results.failed += @{ Path = $file; Error = "File not found or is not a regular file." }
-            }
-        } catch {
-            $results.failed += @{ Path = $file; Error = $_.Exception.Message }
-        }
+  const filesToDelete = req.body.files;
+  
+  if (!filesToDelete || !Array.isArray(filesToDelete) || filesToDelete.length === 0) {
+    log(LOG_LEVELS.WARN, CATEGORIES.DELETE, `No files specified for deletion in request.`);
+    return res.status(400).json({ 
+      error: 'No files specified for deletion',
+      details: 'The request must include a "files" array with at least one file path'
+    });
+  }
+  
+  log(LOG_LEVELS.INFO, CATEGORIES.DELETE, `Attempting to delete ${filesToDelete.length} files.`);
+  
+  const invalidFiles = filesToDelete.filter(file => typeof file !== 'string' || file.trim() === '');
+  if (invalidFiles.length > 0) {
+    log(LOG_LEVELS.ERROR, CATEGORIES.DELETE, `Invalid file paths in request: ${invalidFiles.length} invalid entries.`);
+    return res.status(400).json({
+      error: 'Invalid file paths provided',
+      details: 'All file paths must be non-empty strings',
+      invalidCount: invalidFiles.length
+    });
+  }
+  
+  const fileListString = filesToDelete.map(file => `'${file.replace(/'/g, "''")}'`).join(',');
+  
+  const powershellCommand = `@(${fileListString}) | ForEach-Object { Remove-Item -Path $_ -Force }`;
+  
+  log(LOG_LEVELS.DETAIL, CATEGORIES.POWERSHELL, `Executing (truncated): ${powershellCommand.substring(0, 100)}...`);
+  
+  exec(`powershell -Command "${powershellCommand}"`, { maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+    if (error) {
+      log(LOG_LEVELS.ERROR, CATEGORIES.DELETE, `Error deleting files: ${error.message}`);
+      return res.status(500).json({ 
+        error: error.message,
+        details: 'Error executing PowerShell command to delete files',
+        filesAttempted: filesToDelete.length
+      });
     }
     
-    # Return results as JSON for parsing
-    $results | ConvertTo-Json -Depth 3
-    `;
-
-    execFile('powershell', [
-        '-NoProfile', 
-        '-ExecutionPolicy', 'Bypass', 
-        '-Command', psCommand 
-        ], 
-        { 
-            maxBuffer: MAX_BUFFER_SIZE, 
-            timeout: SCRIPT_TIMEOUT 
-        },
-        (error, stdout, stderr) => {
-            // Handle timeout specifically
-            if (error && error.killed) {
-                console.error(`[DELETE TIMEOUT] Script execution timed out after ${SCRIPT_TIMEOUT/1000} seconds`);
-                return res.status(504).json({
-                    error: "Operation timed out",
-                    details: "The delete operation took too long and was aborted"
-                });
-            }
-            
-            if (error) {
-                console.error(`[DELETE SCRIPT ERROR] Error deleting files: ${error.message}`);
-                console.error(`[DELETE SCRIPT STDERR] ${stderr}`);
-                return res.status(500).json({
-                    error: error.message,
-                    details: stderr || 'Error executing PowerShell delete command'
-                });
-            }
-
-            if (stderr) { // Log any stderr for delete operations
-                console.warn(`[DELETE SCRIPT STDERR] ${stderr}`);
-            }
-
-            try {
-                // PowerShell script outputs JSON: { deleted: [...], failed: [...] }
-                const results = JSON.parse(stdout.trim() || '{}');
-                const numDeleted = results.deleted ? results.deleted.length : 0;
-                const numFailed = results.failed ? results.failed.length : 0;
-
-                console.log(`[DELETE SUCCESS] Processed delete command. Deleted: ${numDeleted}, Failed: ${numFailed}`);
-                
-                if (numFailed > 0 && numDeleted === 0 && filesToDelete.length > 0) {
-                     // All failed, this is more like an error or partial failure
-                     return res.status(207).json({ // Multi-Status
-                        partialSuccess: false,
-                        message: `Attempted to delete ${filesToDelete.length} file(s). ${numDeleted} succeeded, ${numFailed} failed.`,
-                        details: 'Some files may not have been deleted successfully.',
-                        deleted: results.deleted || [],
-                        failed: results.failed || [],
-                        filesAttempted: filesToDelete.length
-                    });
-                }
-
-                res.json({
-                    success: numFailed === 0,
-                    message: `${numDeleted} file(s) deleted successfully.${numFailed > 0 ? ` ${numFailed} failed.` : ''}`,
-                    deleted: results.deleted || [],
-                    failed: results.failed || []
-                });
-            } catch (e) {
-                console.error(`[DELETE PARSE ERROR] Error parsing PowerShell output: ${e.message}`);
-                console.error(`[DELETE RAW STDOUT] ${stdout.substring(0, 500)}`);
-                res.status(500).json({
-                    error: `Failed to parse delete results: ${e.message}`,
-                    details: 'The PowerShell delete command may have run, but its output was unreadable.',
-                    rawOutput: stdout.substring(0, 200)
-                });
-            }
-        }
-    );
+    if (stderr && stderr.trim() !== '') {
+      log(LOG_LEVELS.WARN, CATEGORIES.DELETE, `Issues during file deletion: ${stderr.trim()}`);
+      
+      return res.status(207).json({
+        partialSuccess: true,
+        message: `Some files may not have been deleted successfully`,
+        details: stderr,
+        filesAttempted: filesToDelete.length
+      });
+    }
+    
+    log(LOG_LEVELS.SUCCESS, CATEGORIES.DELETE, `Successfully processed delete command for ${filesToDelete.length} files.`);
+    if (stdout && stdout.trim() !== '') {
+      log(LOG_LEVELS.DEBUG, CATEGORIES.POWERSHELL, `Output (first 200 chars): ${stdout.substring(0, 200)}${stdout.length > 200 ? '...' : ''}`);
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `${filesToDelete.length} files deleted successfully`
+    });
+  });
 });
 
-// Middleware for handling other unhandled errors
+// Middleware for handling errors
 app.use((err, req, res, next) => {
-    console.error(`[SERVER ERROR] Unhandled exception: ${err.message}`);
-    console.error(err.stack);
-    if (res.headersSent) {
-        return next(err);
-    }
-    res.status(500).json({
-        error: 'Internal server error',
-        message: err.message || 'An unexpected error occurred.',
-        path: req.path
-    });
+  log(LOG_LEVELS.ERROR, CATEGORIES.SERVER, `Unhandled exception on path ${req.path}: ${err.message}`);
+  if (err.stack) {
+    log(LOG_LEVELS.DEBUG, CATEGORIES.SERVER, `Stack trace:\\n${err.stack}`);
+  }
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message,
+    path: req.path
+  });
 });
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`-----------------------------------------------`);
-    console.log(`| Visio Temp File Remover Server (Refactored) |`);
-    console.log(`-----------------------------------------------`);
-    console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Using config file: ${path.join(__dirname, 'config.json')}`);
-    console.log(`Scan script: ${SCAN_SCRIPT}`);
-    console.log(`Remove script: ${REMOVE_SCRIPT}`);
-    console.log(`API endpoints available at:`);
-    console.log(`  - POST http://localhost:${PORT}/api/scan`);
-    console.log(`  - POST http://localhost:${PORT}/api/delete`);
-    console.log(`  - GET  http://localhost:${PORT}/health`);
-    console.log(`Press Ctrl+C to stop the server`);
-}); 
+  const serverName = "Visio Temp File Remover Server";
+  const version = require('./package.json').version;
+  const line = `═`.repeat(serverName.length + version.length + 8);
+
+  console.log(chalk.bold.cyan(`\n╔${line}╗`));
+  console.log(chalk.bold.cyan(`║  ${serverName} v${version}  ║`));
+  console.log(chalk.bold.cyan(`╚${line}╝\n`));
+  
+  log(LOG_LEVELS.INFO, CATEGORIES.CONFIG, `Environment: ${NODE_ENV}`);
+  log(LOG_LEVELS.INFO, CATEGORIES.CONFIG, `Default scan directory: ${DEFAULT_SCAN_DIR_DISPLAY}`);
+  logSeparator();
+  log(LOG_LEVELS.SUCCESS, CATEGORIES.SERVER, `Server running at http://localhost:${PORT}`);
+  log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `API endpoints available at:`);
+  log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `  - POST /api/scan`);
+  log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `  - POST /api/delete`);
+  logSeparator();
+  log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `Press Ctrl+C to stop the server.`);
+});

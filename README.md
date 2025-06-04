@@ -1,158 +1,78 @@
 # Visio Temp File Remover
 
-A utility for finding and removing temporary files created by Microsoft Visio. Provides both command-line and web interfaces for managing Visio temporary files.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+A specialized web application designed to find and remove corrupted temporary Visio files that can cause errors in Microsoft Visio environments.
 
-- Scan directories for Visio temporary files
-- Select specific files for deletion
-- Secure deletion with validation
-- Two interface options:
-  - Python CLI for command-line use and automation
-  - Node.js web application for browser-based use
-- Shared PowerShell backend for consistent behavior
+![Visio Temp File Remover Screenshot](https://via.placeholder.com/800x400?text=Visio+Temp+File+Remover)
 
-## Screenshots
+## 🔍 Overview
 
-*[Screenshots to be added]*
+The Visio Temp File Remover tool addresses a common problem in Microsoft Visio environments where temporary files (specifically those matching the pattern `~$$*.~vssx`) can cause errors and corruption in Visio shapes and templates. These files are often hidden by default and difficult to locate and remove through normal file management tools.
 
-## Requirements
+This application provides an intuitive web interface that allows users to:
+1. Scan directories for problematic temporary files
+2. Review what will be deleted before taking action
+3. Safely remove these files with proper permission handling
 
-- Windows 10 or newer
-- PowerShell 5.1 or newer
-- Python 3.8+ (for CLI)
-- Node.js 14+ (for web interface)
+## ✨ Features
 
-## Installation
+- **Smart Scanning**: Recursively scans specified directories for Visio temporary files matching `~$$*.~vssx` pattern
+- **Hidden File Detection**: Uses PowerShell with proper escaping to find hidden system files that Windows Explorer might not display
+- **Preview Before Deletion**: Lists all found files with full paths before any deletion occurs
+- **Selective Deletion**: Choose which files to delete rather than removing all matches
+- **User-Friendly Interface**: Simple web interface that requires no technical knowledge to operate
+- **Secure Operations**: All file operations are performed server-side with proper error handling
 
-### CLI Tool
+## 🛠️ Technology Stack
 
+- **Backend**: Node.js with Express.js
+- **Frontend**: HTML5, CSS3, and vanilla JavaScript
+- **System Integration**: PowerShell commands for file operations
+- **Styling**: Bootstrap for responsive design
+- **HTTP Requests**: Fetch API for AJAX operations
+
+## 📋 Requirements
+
+- Windows environment (PowerShell required)
+- Node.js (v12.0.0 or higher)
+- Administrative privileges (for accessing system folders)
+- Web browser (Chrome, Firefox, Edge recommended)
+
+## 🚀 Getting Started
+
+For quick setup and usage instructions, please refer to the [QUICKSTART.md](QUICKSTART.md) file.
+
+Basic steps include:
 1. Clone this repository
-2. Navigate to the `cli-tool` directory
-3. Install Python dependencies (the requirements.txt file is already included):
-```bash
-pip install -r requirements.txt
-```
-
-### Web Interface
-
-1. Clone this repository
-2. Install Node.js dependencies:
-```bash
-npm install
-```
-3. Start the server:
-```bash
-node app.js
-```
+2. Install dependencies with `npm install`
+3. Start the server with `npm start` or by running `start.bat`
 4. Access the web interface at http://localhost:3000
 
-## Usage
+## 📄 License
 
-### CLI Tool
-
-Run the CLI tool:
-
-```bash
-python cli-tool/visio_temp_file_remover.py
-```
-
-Follow the interactive prompts to:
-1. Select a directory to scan
-2. Choose files to delete
-3. Confirm deletion
-
-### Web Interface
-
-1. Start the web server: `node app.js`
-2. Navigate to http://localhost:3000 in your browser
-3. Enter a directory path to scan
-4. Select files to delete
-5. Click "Delete Selected Files"
-
-## Configuration
-
-Configuration settings are stored in `config.json` in the root directory. Example:
-
-```json
-{
-  "default_scan_path": "C:\\Users\\Public\\Documents\\Visio Files",
-  "temp_file_patterns": [
-    "~$$*.vssx",
-    "~$$*.vsdx",
-    "~$$*.vstx",
-    "~$$*.vsdm",
-    "~$$*.vsd"
-  ],
-  "powershell_scripts_path": "scripts",
-  "cli_tool_path": "cli-tool"
-}
-```
-
-### Environment-Specific Configuration
-
-For different environments, create a `config.[environment].json` file (e.g., `config.development.json`). Set the `NODE_ENV` environment variable to load the appropriate configuration.
-
-## Architecture
-
-This project uses a layered architecture:
-- User interfaces (Python CLI, Node.js web app)
-- Shared configuration (JSON)
-- PowerShell scripts for core file operations
-
-PowerShell scripts return structured JSON data for consistent behavior across interfaces.
-
-## Security
-
-Recent security improvements include:
-- Removal of command injection vulnerabilities
-- Enhanced input validation at all levels
-- Protection of system directories
-- Timeout handling for script execution
-- Pattern validation to ensure only legitimate Visio temp files are processed
-
-## Development
-
-### Project Structure
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ```
-visio-temp-file-remover/
-├── app.js                     # Main Node.js web application
-├── config.json                # Shared configuration
-├── config.development.json    # Development environment config
-├── cli-tool/
-│   ├── requirements.txt       # Python dependencies
-│   └── visio_temp_file_remover.py  # Python CLI application
-├── scripts/
-│   ├── Scan-VisioTempFiles.ps1     # PowerShell scanning script
-│   └── Remove-VisioTempFiles.ps1   # PowerShell deletion script
-├── web-ui/
-│   ├── public/                # Static web assets
-│   │   ├── styles.css         # CSS styling
-│   │   └── main.js            # Frontend JavaScript
-│   └── views/
-│       └── index.html         # Main HTML template
+MIT License
+
+Copyright (c) 2023 Visio Temp File Remover
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
-
-### Contributing
-
-Contributions are welcome! Please check out our [contributing guidelines](CONTRIBUTING.md) for details.
-
-## Roadmap
-
-- Comprehensive documentation
-- Automated testing
-- Enhanced logging
-- UI improvements
-- Performance optimization
-- Cross-platform support planning
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Original Python CLI tool team
-- Original Node.js web application team
-- All contributors to the unified codebase 
