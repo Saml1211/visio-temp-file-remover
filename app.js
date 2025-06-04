@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
 const chalk = require('chalk');
+const os = require('os');
 
 // --- Logger Utility ---
 const LOG_LEVELS = {
@@ -163,8 +164,27 @@ function logSeparator(character = '─', length = 60) {
 
 // --- End Logger Utility ---
 
+// Function to get local IP addresses
+function getLocalIPs() {
+  const interfaces = os.networkInterfaces();
+  const ips = [];
+  
+  for (const interfaceName in interfaces) {
+    const interface = interfaces[interfaceName];
+    for (const connection of interface) {
+      // Skip internal (localhost) and non-IPv4 addresses
+      if (!connection.internal && connection.family === 'IPv4') {
+        ips.push(connection.address);
+      }
+    }
+  }
+  
+  return ips;
+}
+
 const app = express();
 const PORT = 3000;
+const HOST = '0.0.0.0'; // Bind to all interfaces
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const DEFAULT_SCAN_DIR_DISPLAY = 'Z:\\\\ENGINEERING TEMPLATES\\\\VISIO SHAPES 2025'; // For display
 
@@ -319,7 +339,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start the server
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   const serverName = "Visio Temp File Remover Server";
   const version = require('./package.json').version;
   const line = `═`.repeat(serverName.length + version.length + 8);
@@ -331,8 +351,23 @@ app.listen(PORT, () => {
   log(LOG_LEVELS.INFO, CATEGORIES.CONFIG, `Environment: ${NODE_ENV}`);
   log(LOG_LEVELS.INFO, CATEGORIES.CONFIG, `Default scan directory: ${DEFAULT_SCAN_DIR_DISPLAY}`);
   logSeparator();
-  log(LOG_LEVELS.SUCCESS, CATEGORIES.SERVER, `Server running at http://localhost:${PORT}`);
-  log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `API endpoints available at:`);
+  
+  // Show all available access URLs
+  log(LOG_LEVELS.SUCCESS, CATEGORIES.SERVER, `Server running on port ${PORT} and accessible at:`);
+  log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `  • Local:    http://localhost:${PORT}`);
+  log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `  • Local:    http://127.0.0.1:${PORT}`);
+  
+  const localIPs = getLocalIPs();
+  if (localIPs.length > 0) {
+    localIPs.forEach(ip => {
+      log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `  • Network:  http://${ip}:${PORT}`);
+    });
+  } else {
+    log(LOG_LEVELS.WARN, CATEGORIES.SERVER, `  • Network:  No local network IPs detected`);
+  }
+  
+  logSeparator();
+  log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `API endpoints available at all above URLs:`);
   log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `  - POST /api/scan`);
   log(LOG_LEVELS.INFO, CATEGORIES.SERVER, `  - POST /api/delete`);
   logSeparator();
