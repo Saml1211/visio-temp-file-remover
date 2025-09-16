@@ -187,7 +187,7 @@ class VisioTempFileRemoverGUI:
             dir_quoted = f"'{escaped_dir}'"
             
             # Patterns to search for
-            patterns = ["~$*.~vssx", "~$*.~vsdx", "~$*.~vstx", "~$*.~vsdm", "~$*.~vsd"]
+            patterns = ["~$*.vssx", "~$*.vsdx", "~$*.vstx", "~$*.vsdm", "~$*.vsd"]
             patterns_list = [f"'{p}'" for p in patterns]
             patterns_array = "@(" + ",".join(patterns_list) + ")"
             
@@ -317,11 +317,11 @@ class VisioTempFileRemoverGUI:
                 size = file_info.get('Size', 0)
                 size_str = self.format_file_size(size) if size else "Unknown"
                 
-                # Get relative path instead of full path
+                # Get full path and relative path for display
                 full_path = file_info.get('FullName', 'Unknown')
                 scan_directory = self.directory_var.get().strip()
                 
-                # Calculate relative path
+                # Calculate relative path for display
                 if full_path != 'Unknown' and scan_directory:
                     try:
                         # Normalize paths for comparison
@@ -345,12 +345,13 @@ class VisioTempFileRemoverGUI:
                 else:
                     path_display = full_path
                 
-                self.tree.insert('', tk.END, values=(
+                # Insert item with full path as tags so we can retrieve it later for deletion
+                item_id = self.tree.insert('', tk.END, values=(
                     file_info.get('Name', 'Unknown'),
                     path_display,
                     size_str,
                     file_info.get('LastModified', 'Unknown')
-                ))
+                ), tags=(full_path,))  # Store full path in tags
             except Exception as e:
                 print(f"Error inserting file into tree: {e}")
                 
@@ -369,12 +370,18 @@ class VisioTempFileRemoverGUI:
             messagebox.showinfo("Info", "Please select files to delete.")
             return
             
-        # Get selected file paths
+        # Get selected file paths (full paths from tags)
         selected_paths = []
         for item in selected_items:
-            values = self.tree.item(item, 'values')
-            if values and len(values) > 1:
-                selected_paths.append(values[1])  # Path is in the second column
+            # Get full path from tags instead of displayed path
+            tags = self.tree.item(item, 'tags')
+            if tags and len(tags) > 0:
+                selected_paths.append(tags[0])  # Full path is stored in first tag
+            else:
+                # Fallback to displayed path if tags not available
+                values = self.tree.item(item, 'values')
+                if values and len(values) > 1:
+                    selected_paths.append(values[1])  # Path is in the second column
                 
         if not selected_paths:
             messagebox.showinfo("Info", "No valid files selected for deletion.")

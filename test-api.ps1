@@ -4,7 +4,9 @@
 function Test-API {
     Write-Host "Starting server..." -ForegroundColor Cyan
     $serverJob = Start-Job -ScriptBlock {
-        cd "F:\Repos\MyRepos\visio-temp-file-remover"
+        # Use current directory instead of hardcoded path
+        $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+        cd $scriptDir
         node app.js
     }
     
