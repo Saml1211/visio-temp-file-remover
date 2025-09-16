@@ -85,7 +85,7 @@ $RECYCLE.BIN/
 .yarnclean
 
 # VSCode
-.vscode/*
+.vscode/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
@@ -110,4 +110,11 @@ temp/
 
 # Custom for this project structure
 # Ensure web-ui specific node_modules are ignored if not handled globally
-web-ui/node_modules/ 
+web-ui/node_modules/
+
+# Qwen Code files
+.qwen/
+memory-bank/
+
+# Release files
+release/ 
