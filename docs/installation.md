@@ -48,11 +48,11 @@ If you get an error, you may need to:
 2. **Scanning for Files**:
    - Click "Scan for Files" to search for Visio temporary files
    - The application looks for files matching these patterns:
-     - `~$$*.~vssx`
-     - `~$$*.~vsdx`
-     - `~$$*.~vstx`
-     - `~$$*.~vsdm`
-     - `~$$*.~vsd`
+     - `~$*.vssx`
+     - `~$*.vsdx`
+     - `~$*.vstx`
+     - `~$*.vsdm`
+     - `~$*.vsd`
      
 3. **Reviewing Results**:
    - Found files are displayed in the table

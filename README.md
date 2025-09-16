@@ -8,7 +8,7 @@ A specialized web application designed to find and remove corrupted temporary Vi
 
 ## 🔍 Overview
 
-The Visio Temp File Remover tool addresses a common problem in Microsoft Visio environments where temporary files (specifically those matching the pattern `~$*.~vssx`) can cause errors and corruption in Visio shapes and templates. These files are often hidden by default and difficult to locate and remove through normal file management tools.
+The Visio Temp File Remover tool addresses a common problem in Microsoft Visio environments where temporary files (specifically those matching the pattern `~$*.vssx`) can cause errors and corruption in Visio shapes and templates. These files are often hidden by default and difficult to locate and remove through normal file management tools.
 
 This project provides two interfaces for the same core functionality:
 1. **Web Interface**: A web-based application for server environments
@@ -21,7 +21,7 @@ Both interfaces allow users to:
 
 ## ✨ Features
 
-- **Smart Scanning**: Recursively scans specified directories for Visio temporary files matching `~$*.~vssx` pattern
+- **Smart Scanning**: Recursively scans specified directories for Visio temporary files matching `~$*.vssx` pattern
 - **Hidden File Detection**: Uses PowerShell with proper escaping to find hidden system files that Windows Explorer might not display
 - **Preview Before Deletion**: Lists all found files with full paths before any deletion occurs
 - **Selective Deletion**: Choose which files to delete rather than removing all matches

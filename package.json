@@ -1,7 +1,7 @@
 {
   "name": "visio-temp-file-remover",
   "version": "1.0.0",
-  "description": "A web tool for finding and deleting corrupted Visio temporary files (~$$*.~vssx) that cause errors",
+  "description": "A web tool for finding and deleting corrupted Visio temporary files (~$*.vssx) that cause errors",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",

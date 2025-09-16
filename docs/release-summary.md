@@ -21,7 +21,7 @@ This release introduces a standalone desktop GUI application for the Visio Temp 
 - Background threading to prevent UI freezing
 
 ### File Operations
-- Scans directories for Visio temporary files (~$$*.~vssx, ~$$*.~vsdx, etc.)
+- Scans directories for Visio temporary files (~$*.vssx, ~$*.vsdx, etc.)
 - Displays file details including name, relative path, size, and last modified date
 - Allows selective deletion of files with safety confirmations
 - Provides clear success/failure feedback

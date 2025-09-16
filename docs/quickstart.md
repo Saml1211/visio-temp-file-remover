@@ -76,7 +76,7 @@ Available endpoints:
 
 1. Enter the directory path you want to scan (e.g., `Z:\ENGINEERING TEMPLATES\VISIO SHAPES 2025`)
 2. Click the "Scan for Files" button
-3. The application will display all temporary Visio files (matching pattern `~$$*.~vssx`) found in the specified directory and its subdirectories
+3. The application will display all temporary Visio files (matching pattern `~$*.vssx`) found in the specified directory and its subdirectories
 
 ### Deleting Files
 
@@ -98,7 +98,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"directory":"Z:\\ENGINEERI
 #### Delete API
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"files":["Z:\\ENGINEERING TEMPLATES\\VISIO SHAPES 2025\\~$$SCHEMATIC TEMPLATES.~vssx"]}' http://localhost:3000/api/delete
+curl -X POST -H "Content-Type: application/json" -d '{"files":["Z:\\ENGINEERING TEMPLATES\\VISIO SHAPES 2025\\~$SCHEMATIC TEMPLATES.vssx"]}' http://localhost:3000/api/delete
 ```
 
 ## Troubleshooting
@@ -133,7 +133,7 @@ npm install
 If the application can't find any files:
 
 1. Ensure the directory path is correct and accessible
-2. Verify that there are indeed `~$$*.~vssx` files in the specified directory
+2. Verify that there are indeed `~$*.vssx` files in the specified directory
 3. Try using absolute paths instead of relative paths
 
 For Windows paths that include spaces or special characters, ensure they are properly escaped:

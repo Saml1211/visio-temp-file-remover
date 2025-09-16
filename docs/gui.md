@@ -1,6 +1,6 @@
 # Visio Temp File Remover GUI
 
-A standalone desktop application for finding and removing corrupted Visio temporary files (~$*.~vssx) that cause errors.
+A standalone desktop application for finding and removing corrupted Visio temporary files (~$*.vssx) that cause errors.
 
 ## Overview
 

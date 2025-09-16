@@ -221,7 +221,7 @@ class VisioTempFileRemoverGUI:
                 print("Trying direct PowerShell approach like web version...")
                 # Direct approach like the web version
                 escaped_path = directory.replace("'", "''")
-                direct_ps_command = f"Get-ChildItem -Path '{escaped_path}' -Recurse -File -Force -Include \"~$*.~vssx\",\"~$*.~vsdx\",\"~$*.~vstx\",\"~$*.~vsdm\",\"~$*.~vsd\" | Select-Object -Property FullName,Name | ConvertTo-Json"
+                direct_ps_command = f"Get-ChildItem -Path '{escaped_path}' -Recurse -File -Force -Include \"~$*.vssx\",\"~$*.vsdx\",\"~$*.vstx\",\"~$*.vsdm\",\"~$*.vsd\" | Select-Object -Property FullName,Name | ConvertTo-Json"
                 
                 direct_ps_cmd_list = [
                     "powershell",
