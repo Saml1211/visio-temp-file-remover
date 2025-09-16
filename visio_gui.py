@@ -1,10 +1,21 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkinter import ttk, filedialog, messagebox
 import subprocess
 import json
 import os
 import threading
 from pathlib import Path
+import sys
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = Path(__file__).resolve().parent
+
+    return Path(base_path) / relative_path
 
 class VisioTempFileRemoverGUI:
     def __init__(self, root):
@@ -165,8 +176,7 @@ class VisioTempFileRemoverGUI:
         """Thread function to scan for files"""
         try:
             # Get the script directory
-            script_dir = Path(__file__).resolve().parent
-            scan_script = script_dir / "scripts" / "Scan-VisioTempFiles.ps1"
+            scan_script = resource_path("scripts") / "Scan-VisioTempFiles.ps1"
             
             if not scan_script.exists():
                 self.root.after(0, lambda: messagebox.showerror("Error", "Scan script not found."))
@@ -396,8 +406,7 @@ class VisioTempFileRemoverGUI:
             failed_count = 0
             
             # Try using the PowerShell script first
-            script_dir = Path(__file__).resolve().parent
-            remove_script = script_dir / "scripts" / "Remove-VisioTempFiles.ps1"
+            remove_script = resource_path("scripts") / "Remove-VisioTempFiles.ps1"
             
             if remove_script.exists():
                 # Escape file paths for PowerShell

@@ -49,6 +49,7 @@
 - `run_gui.bat`: Batch file to easily start the application
 - `docs/gui.md`: Documentation for the GUI application
 - `docs/quickstart.md`: Quick start and usage guide
+- `docs/build-gui.md`: Instructions for creating a standalone executable
 - `scripts/Scan-VisioTempFiles.ps1`: PowerShell script for scanning files
 - `scripts/Remove-VisioTempFiles.ps1`: PowerShell script for deleting files
 - `config.json`: Configuration file
