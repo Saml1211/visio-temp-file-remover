@@ -198,7 +198,7 @@ def find_temp_files(directory: Path, patterns: list[str]) -> list[Path]:
     
     # Build PowerShell command as a single string
     # Call the script directly without ampersand operator to avoid parameter confusion
-    ps_command = f"& {SCAN_SCRIPT_PATH} -ScanPath {dir_str_quoted} -Patterns {patterns_array} -AsJson"
+    ps_command = f'& "{SCAN_SCRIPT_PATH}" -ScanPath {dir_str_quoted} -Patterns {patterns_array} -AsJson'
     
     ps_cmd_list = [
         "powershell", 

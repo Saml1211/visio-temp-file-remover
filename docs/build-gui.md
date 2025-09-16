@@ -11,12 +11,13 @@ This script will help you create a standalone executable for the Visio Temp File
 
 1. Install the required Python packages:
    ```
-   pip install pyinstaller
+   py -3 -m pip install --upgrade pip
+   py -3 -m pip install pyinstaller
    ```
 
 2. Create the standalone executable:
    ```
-   pyinstaller --onefile --windowed --name "VisioTempFileRemover" --add-data "scripts;scripts" visio_gui.py
+   py -3 -m PyInstaller --onefile --windowed --name "VisioTempFileRemover" --add-data "scripts;scripts" visio_gui.py
    ```
 
 3. The executable will be created in the `dist` folder

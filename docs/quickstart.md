@@ -14,7 +14,7 @@ This guide will help you quickly set up, install, and run the Visio Temp File Re
 
 Before setting up the application, ensure you have the following installed:
 
-- [Node.js](https://nodejs.org/) (v12.0.0 or higher)
+- [Node.js](https://nodejs.org/) (v18.x or higher, LTS)
 - [npm](https://www.npmjs.com/) (typically comes with Node.js)
 - [PowerShell](https://docs.microsoft.com/en-us/powershell/) (v5.0 or higher) - Windows only
 
@@ -23,8 +23,8 @@ Before setting up the application, ensure you have the following installed:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/your-username/visio-temp-file-remover.git
-cd visio-temp-file-remover
+git clone https://github.com/Saml1211/visio-temp-file-remover2.git
+cd visio-temp-file-remover2
 ```
 
 2. Install dependencies:
@@ -57,7 +57,7 @@ node app.js
 
 The server will start on port 3000 by default. You should see a message in the console:
 
-```
+```text
 Server running at http://localhost:3000
 Available endpoints:
   - GET / : Web interface
@@ -139,7 +139,7 @@ If the application can't find any files:
 For Windows paths that include spaces or special characters, ensure they are properly escaped:
 ```
 Z:\My Folder\With Spaces  # Correct format for the UI
-Z:\\My Folder\\With Spaces  # Correct format for API JSON
+Z:\My Folder\With Spaces  # Correct format for API JSON
 ```
 
 #### Permission Issues

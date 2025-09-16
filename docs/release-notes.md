@@ -47,8 +47,8 @@
 ### Files Included
 - `visio_gui.py`: Main application file
 - `run_gui.bat`: Batch file to easily start the application
-- `GUI_README.md`: Documentation for the GUI application
-- `INSTALLATION_GUIDE.md`: Detailed installation and usage guide
+- `docs/gui.md`: Documentation for the GUI application
+- `docs/quickstart.md`: Quick start and usage guide
 - `scripts/Scan-VisioTempFiles.ps1`: PowerShell script for scanning files
 - `scripts/Remove-VisioTempFiles.ps1`: PowerShell script for deleting files
 - `config.json`: Configuration file

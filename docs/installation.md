@@ -4,8 +4,8 @@
 This guide will help you install and use the Visio Temp File Remover GUI application. This tool helps find and remove corrupted Visio temporary files that can cause errors in Microsoft Visio environments.
 
 ## System Requirements
-- Windows operating system (Windows 7 or later)
-- Python 3.6 or higher
+- Windows operating system (Windows 10 or later recommended)
+- Python 3.8 or higher
 - PowerShell (included with Windows)
 
 ## Installation Options
@@ -60,7 +60,7 @@ If you get an error, you may need to:
    - Paths are shown relative to make them easier to read
    
 4. **Deleting Files**:
-   - Select one or more files by clicking on them (use Ctrl/Cmd or Shift to select multiple)
+   - Select one or more files by clicking on them (use Ctrl or Shift to select multiple)
    - Click "Delete Selected Files"
    - Confirm the deletion when prompted
    - The application will show how many files were successfully deleted

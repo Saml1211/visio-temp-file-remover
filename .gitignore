@@ -117,4 +117,15 @@ web-ui/node_modules/
 memory-bank/
 
 # Release files
-release/ 
+release/
+
+# Python (GUI tooling)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+*.spec 

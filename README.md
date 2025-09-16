@@ -88,7 +88,7 @@ Basic steps include:
 ### Desktop GUI (Recommended for Local Use)
 The project includes a standalone desktop GUI application that runs locally without a web server:
 
-1. Download the latest release from the [Releases](https://github.com/yourusername/visio-temp-file-remover/releases) page
+1. Download the latest release from the [Releases](https://github.com/Saml1211/visio-temp-file-remover2/releases) page
 2. Extract the package to a folder of your choice
 3. Double-click on `run_gui.bat` in the root directory, or run `python visio_gui.py` from the command line
 4. Use the GUI to scan directories and remove Visio temp files

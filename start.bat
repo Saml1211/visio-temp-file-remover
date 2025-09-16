@@ -1,4 +1,6 @@
 @echo off
+setlocal
+cd /d "%~dp0"
 echo ========================================================
 echo =    Visio Temp File Remover - Application Launcher    =
 echo ========================================================
@@ -56,10 +58,16 @@ echo.
 
 :: Start the application
 node app.js
+set "RC=%ERRORLEVEL%"
 
 :: This will only execute if the application crashes
 echo.
-echo ERROR: The application has stopped unexpectedly.
-echo Please check the error messages above.
+if "%RC%"=="3221225786" (
+  echo Server stopped by user (Ctrl+C).
+) else if "%RC%"=="0" (
+  echo Server exited normally.
+) else (
+  echo ERROR: The application has stopped unexpectedly. (exit code %RC%)
+)
 echo.
 pause

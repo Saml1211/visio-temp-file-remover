@@ -10,7 +10,8 @@ def create_release_package():
     
     # Define package name and version
     package_name = "VisioTempFileRemover-GUI"
-    version = "1.0.0"
+    # Prefer environment override, e.g., VTFR_GUI_VERSION=1.0.1
+    version = os.getenv("VTFR_GUI_VERSION", "1.0.0")
     
     # Create release directory
     release_dir = Path("release")
@@ -39,10 +40,10 @@ def create_release_package():
         if src_path.exists():
             dst_path = package_dir / file_path
             dst_path.parent.mkdir(parents=True, exist_ok=True)
-            if src_path.is_file():
-                shutil.copy2(src_path, dst_path)
-            else:
+            if src_path.is_dir():
                 shutil.copytree(src_path, dst_path)
+            elif src_path.is_file():
+                shutil.copy2(src_path, dst_path)
     
     # Copy documentation files
     docs_to_include = [
@@ -61,7 +62,7 @@ def create_release_package():
             shutil.copy2(src_path, dst_path)
     
     # Create a simple installation guide
-    install_guide = f"""# Visio Temp File Remover GUI - Installation Guide
+    install_guide = """# Visio Temp File Remover GUI - Installation Guide
 
 ## System Requirements
 - Windows operating system (Windows 7 or later)
@@ -90,15 +91,15 @@ def create_release_package():
 - For GUI information, see docs/gui.md
 """
     
-    with open(package_dir / "INSTALLATION.md", "w") as f:
+    with open(package_dir / "INSTALLATION.md", "w", encoding="utf-8", newline="\n") as f:
         f.write(install_guide)
     
     # Create a release zip file
     zip_filename = f"{package_name}-v{version}.zip"
     zip_path = release_dir / zip_filename
     
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(package_dir):
+    with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
+        for root, _, files in os.walk(package_dir):
             for file in files:
                 file_path = Path(root) / file
                 arc_path = file_path.relative_to(release_dir)
