@@ -7,15 +7,7 @@ import threading
 from pathlib import Path
 import sys
 
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller"""
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = Path(__file__).resolve().parent
 
-    return Path(base_path) / relative_path
 
 class VisioTempFileRemoverGUI:
     def __init__(self, root):
@@ -23,9 +15,6 @@ class VisioTempFileRemoverGUI:
         self.root.title("Visio Temp File Remover")
         self.root.geometry("800x600")
         self.root.resizable(True, True)
-        
-        # Set application icon
-        self.set_icon()
         
         # Configure styles
         self.style = ttk.Style()
@@ -48,15 +37,7 @@ class VisioTempFileRemoverGUI:
             messagebox.showerror("Error", "PowerShell is not available on this system. This tool requires PowerShell to run.")
             self.root.destroy()
             return
-            
-    def set_icon(self):
-        """Set the application icon using the .ico file"""
-        icon_path = resource_path("app_icon.ico")
-        if icon_path.exists():
-            try:
-                self.root.iconbitmap(icon_path)
-            except tk.TclError as e:
-                print(f"Warning: Could not set icon. Ensure the file is a valid .ico format. Error: {e}")
+
                 
     def is_powershell_available(self):
         """Check if PowerShell is available on the system"""
@@ -199,25 +180,12 @@ class VisioTempFileRemoverGUI:
     def _scan_files_thread(self, directory):
         """Thread function to scan for files"""
         try:
-            # Get the script directory
-            scan_script = resource_path("scripts") / "Scan-VisioTempFiles.ps1"
-            
-            if not scan_script.exists():
-                self.root.after(0, lambda: messagebox.showerror("Error", "Scan script not found."))
-                return
-                
             # Escape directory path for PowerShell
             escaped_dir = directory.replace("'", "''")
-            dir_quoted = f"'{escaped_dir}'"
-            
-            # Patterns to search for
-            patterns = ["~$$*.*"]
-            patterns_list = [f"'{p}'" for p in patterns]
-            patterns_array = "@(" + ",".join(patterns_list) + ")"
-            
+
             # Build PowerShell command
-            ps_command = f"& '{scan_script}' -ScanPath {dir_quoted} -Patterns {patterns_array} -AsJson"
-            
+            ps_command = f"Get-ChildItem -Path '{escaped_dir}' -Recurse -File -Force -Include \"~$$*.*\" | Select-Object -Property FullName,Name,DirectoryName,@{Name=\"LastModified\";Expression={{\$_.LastWriteTime.ToString(\"yyyy-MM-dd HH:mm:ss\")}}},@{Name=\"Size\";Expression={{\$_.Length}}} | ConvertTo-Json"
+
             # Execute PowerShell command
             ps_cmd_list = [
                 "powershell",
@@ -225,9 +193,9 @@ class VisioTempFileRemoverGUI:
                 "-ExecutionPolicy", "Bypass",
                 "-Command", ps_command
             ]
-            
+
             print(f"Executing PowerShell command: {ps_command}")
-            
+
             result = subprocess.run(
                 ps_cmd_list,
                 capture_output=True,
@@ -240,63 +208,7 @@ class VisioTempFileRemoverGUI:
             print(f"PowerShell return code: {result.returncode}")
             print(f"PowerShell stdout: {result.stdout}")
             print(f"PowerShell stderr: {result.stderr}")
-            
-            # Also try the direct approach like the web version if the script fails
-            if result.returncode != 0 or (result.stdout.strip() == "" and result.stderr.strip() == ""):
-                print("Trying direct PowerShell approach like web version...")
-                # Direct approach like the web version
-                escaped_path = directory.replace("'", "''")
-                direct_ps_command = f"Get-ChildItem -Path '{escaped_path}' -Recurse -File -Force -Include \"~$$*.*\" | Select-Object -Property FullName,Name | ConvertTo-Json"
-                
-                direct_ps_cmd_list = [
-                    "powershell",
-                    "-NoProfile",
-                    "-ExecutionPolicy", "Bypass",
-                    "-Command", direct_ps_command
-                ]
-                
-                print(f"Executing direct PowerShell command: {direct_ps_command}")
-                
-                direct_result = subprocess.run(
-                    direct_ps_cmd_list,
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    timeout=60,
-                    creationflags=subprocess.CREATE_NO_WINDOW
-                )
-                
-                print(f"Direct PowerShell return code: {direct_result.returncode}")
-                print(f"Direct PowerShell stdout: {direct_result.stdout}")
-                print(f"Direct PowerShell stderr: {direct_result.stderr}")
-                
-                # Use direct result if script approach failed
-                if direct_result.returncode == 0:
-                    result = direct_result
-                    # Handle JSON parsing for direct approach too
-                    if result.stdout.strip() != "":
-                        try:
-                            direct_files_data = json.loads(result.stdout.strip())
-                            # Handle both single object and array cases
-                            if isinstance(direct_files_data, dict):
-                                direct_files_data = [direct_files_data]
-                            elif not isinstance(direct_files_data, list):
-                                direct_files_data = []
-                            # Convert to the format expected by the script
-                            formatted_data = []
-                            for item in direct_files_data:
-                                formatted_item = {
-                                    'FullName': item.get('FullName', ''),
-                                    'Name': item.get('Name', ''),
-                                    'Directory': os.path.dirname(item.get('FullName', '')),
-                                    'Size': 0,  # Size not available in direct approach
-                                    'LastModified': 'Unknown'  # LastModified not available in direct approach
-                                }
-                                formatted_data.append(formatted_item)
-                            # Convert back to JSON string to be parsed by the existing code
-                            result.stdout = json.dumps(formatted_data)
-                        except json.JSONDecodeError:
-                            pass  # If parsing fails, use the original output
+
             
             if result.returncode != 0:
                 error_msg = result.stderr if result.stderr else "Unknown error occurred"
@@ -441,55 +353,58 @@ class VisioTempFileRemoverGUI:
         delete_thread.start()
         
     def _delete_files_thread(self, file_paths):
-        """Thread function to delete files using PowerShell script or direct approach"""
+        """Thread function to delete files using direct PowerShell approach"""
         try:
             deleted_count = 0
             failed_count = 0
             
-            # Try using the PowerShell script first
-            remove_script = resource_path("scripts") / "Remove-VisioTempFiles.ps1"
-            
-            if remove_script.exists():
-                # Use -File and pass file paths as separate arguments
-                ps_cmd_list = [
-                    "powershell",
-                    "-NoProfile",
-                    "-ExecutionPolicy", "Bypass",
-                    "-File", str(remove_script),
-                ] + file_paths + ["-AsJson"]
+            # Perform safety checks in Python before deleting
+            safe_to_delete = []
+            for path in file_paths:
+                # 1. Check if file exists
+                if not os.path.exists(path) or not os.path.isfile(path):
+                    failed_count += 1
+                    print(f"File not found or is not a regular file: {path}")
+                    continue
 
-                print(f"Executing PowerShell delete command with -File: {ps_cmd_list}")
+                # 2. Check if file is in a system directory
+                is_protected_location = False
+                invalid_paths = [
+                    os.environ.get("windir", ""),
+                    os.path.join(os.environ.get("windir", ""), "System32"),
+                    os.path.join(os.environ.get("windir", ""), "System"),
+                    os.environ.get("ProgramFiles", ""),
+                    os.environ.get("ProgramFiles(x86)", ""),
+                    os.environ.get("ProgramData", ""),
+                ]
+                for protected_path in invalid_paths:
+                    if protected_path and os.path.normpath(path).startswith(os.path.normpath(protected_path)):
+                        is_protected_location = True
+                        break
                 
-                result = subprocess.run(
-                    ps_cmd_list,
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    timeout=60  # 60 second timeout
-                )
+                if is_protected_location:
+                    failed_count += 1
+                    print(f"Cannot delete file in system directory: {path}")
+                    continue
+
+                # 3. Check if file matches Visio temporary file pattern
+                if not os.path.basename(path).startswith("~$$"):
+                    failed_count += 1
+                    print(f"File does not match Visio temporary file pattern: {path}")
+                    continue
                 
-                print(f"PowerShell delete return code: {result.returncode}")
-                print(f"PowerShell delete stdout: {result.stdout}")
-                print(f"PowerShell delete stderr: {result.stderr}")
-                
-                # If script works, parse results
-                if result.returncode == 0 and result.stdout.strip() != "":
-                    try:
-                        result_data = json.loads(result.stdout.strip())
-                        deleted_count = len(result_data.get('deleted', []))
-                        failed_count = len(result_data.get('failed', []))
-                        self.root.after(0, self._delete_complete, deleted_count, failed_count)
-                        return
-                    except json.JSONDecodeError as e:
-                        print(f"JSON parsing error with script: {e}")
-                        print(f"Raw output: {result.stdout}")
-            
-            # If script fails or isn't available, use direct approach like web version
+                safe_to_delete.append(path)
+
+            if not safe_to_delete:
+                self.root.after(0, self._delete_complete, deleted_count, failed_count)
+                return
+
+            # Use direct approach like web version
             print("Using direct PowerShell approach for deletion...")
-            file_list_string = [f"'{path.replace("'", "''")}'" for path in file_paths]
+            file_list_string = [f"'{path.replace("'", "''")}'" for path in safe_to_delete]
             file_list_joined = ",".join(file_list_string)
             
-            direct_ps_command = f"@({file_list_joined}) | ForEach-Object {{ Remove-Item -Path $_ -Force }}"
+            direct_ps_command = f"@({file_list_joined}) | ForEach-Object {{ Remove-Item -Path $_ -Force -ErrorAction SilentlyContinue }}"
             
             direct_ps_cmd_list = [
                 "powershell",
@@ -515,12 +430,13 @@ class VisioTempFileRemoverGUI:
             
             # For direct approach, we assume success if no errors
             if direct_result.returncode == 0:
-                deleted_count = len(file_paths)
-                failed_count = 0
+                deleted_count = len(safe_to_delete)
             else:
-                # If there are errors, assume all failed
-                deleted_count = 0
-                failed_count = len(file_paths)
+                # If there are errors, we can't be sure which files failed.
+                # We can try to check which files still exist.
+                still_exist = [path for path in safe_to_delete if os.path.exists(path)]
+                deleted_count = len(safe_to_delete) - len(still_exist)
+                failed_count += len(still_exist)
                 
             self.root.after(0, self._delete_complete, deleted_count, failed_count)
             

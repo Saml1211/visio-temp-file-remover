@@ -27,15 +27,13 @@ Before you begin, ensure you have the following installed:
 3.  **Run the PyInstaller Command:**
     Execute the following command to create the executable:
     ```bash
-    pyinstaller --onefile --windowed --name "VisioTempFileRemover" --add-data "scripts;scripts" --icon="public/app_icon.ico" visio_gui.py
+    pyinstaller --onefile --windowed --name "VisioTempFileRemover" visio_gui.py
     ```
 
     **Command Breakdown:**
     -   `--onefile`: Bundles everything into a single executable file.
     -   `--windowed`: Prevents a console window from appearing when the application is run.
     -   `--name "VisioTempFileRemover"`: Sets the name of the executable.
-    -   `--add-data "scripts;scripts"`: Bundles the `scripts` directory with the executable.
-    -   `--icon="public/app_icon.ico"`: Sets the application icon.
     -   `visio_gui.py`: The main Python script for the application.
 
 4.  **Find the Executable:**
