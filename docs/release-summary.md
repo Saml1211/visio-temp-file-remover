@@ -28,7 +28,7 @@ This release introduces a standalone desktop GUI application for the Visio Temp 
 
 ## Package Contents
 - `visio_gui.py`: Main application file
-- `run_gui.bat`: Batch file for easy application startup
+- `scripts/run_gui.bat`: Batch file for easy application startup
 - `GUI_README.md`: GUI-specific documentation
 - `INSTALLATION_GUIDE.md`: Comprehensive installation and usage guide
 - `RELEASE_NOTES.md`: Release information and changes
@@ -44,7 +44,7 @@ This release introduces a standalone desktop GUI application for the Visio Temp 
 
 ## Installation
 1. Extract the release package to a directory of your choice
-2. Run the application by double-clicking `run_gui.bat`
+2. Run the application by double-clicking `scripts/run_gui.bat`
 3. Or run from command line: `python visio_gui.py`
 
 ## Usage

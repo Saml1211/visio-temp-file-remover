@@ -19,7 +19,7 @@ This initial release provides a standalone desktop application for finding and r
 ## Installation and Usage
 1.  Download the `VisioTempFileRemover.exe` file from the release assets.
 2.  Run the application by double-clicking the `.exe` file.
-3.  Alternatively, you can run from source by downloading the source code and running `run_gui.bat` or `python visio_gui.py`.
+3.  Alternatively, you can run from source by downloading the source code and running `scripts/run_gui.bat` or `python visio_gui.py`.
 4.  Select a directory, scan for files, and delete the ones you want to remove.
 
 ## Requirements

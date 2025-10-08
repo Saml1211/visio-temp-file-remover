@@ -41,10 +41,10 @@ There are two ways to start the application:
 
 ### Method 1: Using the batch file
 
-Simply double-click on the `start.bat` file in the root directory of the project, or run:
+Simply double-click on the `scripts/start.bat` file, or run:
 
 ```bash
-start.bat
+scripts/start.bat
 ```
 
 ### Method 2: Using Node.js directly
@@ -167,7 +167,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 You can test the API endpoints using the included PowerShell script:
 
 ```powershell
-.\test-api.ps1
+.\scripts\test-api.ps1
 ```
 
 This script will:
