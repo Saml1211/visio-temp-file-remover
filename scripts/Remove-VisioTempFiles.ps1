@@ -84,8 +84,8 @@ foreach ($filePath in $FilePaths) {
         
         # Make sure file matches one of Visio temporary file patterns
         $isVisioTempFile = $false
-        $visioPatterns = @('~$*.vssx', '~$*.vsdx', '~$*.vstx', '~$*.vsdm', '~$*.vsd')
-        
+        $visioPatterns = @('~$$*.*')
+
         foreach ($pattern in $visioPatterns) {
             if ($fileObj.Name -like $pattern) {
                 $isVisioTempFile = $true

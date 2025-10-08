@@ -204,7 +204,7 @@ app.post('/api/scan', (req, res) => {
   log(LOG_LEVELS.INFO, CATEGORIES.SCAN, `Request to scan directory: ${targetDir}`);
   
   const escapedPath = targetDir.replace(/'/g, "''");
-  const powershellCommand = `Get-ChildItem -Path '${escapedPath}' -Recurse -File -Force -Include "~\`$*.vssx","~\`$*.vsdx","~\`$*.vstx","~\`$*.vsdm","~\`$*.vsd" | Select-Object -Property FullName,Name | ConvertTo-Json`;
+  const powershellCommand = `Get-ChildItem -Path '${escapedPath}' -Recurse -File -Force -Include "~$$*.*" | Select-Object -Property FullName,Name | ConvertTo-Json`;
   
   log(LOG_LEVELS.DETAIL, CATEGORIES.POWERSHELL, `Executing: ${powershellCommand}`);
   

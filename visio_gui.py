@@ -24,6 +24,9 @@ class VisioTempFileRemoverGUI:
         self.root.geometry("800x600")
         self.root.resizable(True, True)
         
+        # Set application icon
+        self.set_icon()
+        
         # Configure styles
         self.style = ttk.Style()
         self.style.theme_use('clam')
@@ -46,6 +49,15 @@ class VisioTempFileRemoverGUI:
             self.root.destroy()
             return
             
+    def set_icon(self):
+        """Set the application icon using the .ico file"""
+        icon_path = resource_path("app_icon.ico")
+        if icon_path.exists():
+            try:
+                self.root.iconbitmap(icon_path)
+            except tk.TclError as e:
+                print(f"Warning: Could not set icon. Ensure the file is a valid .ico format. Error: {e}")
+                
     def is_powershell_available(self):
         """Check if PowerShell is available on the system"""
         try:
@@ -53,7 +65,8 @@ class VisioTempFileRemoverGUI:
                 ["powershell", "-Command", "Write-Output 'PowerShell Test'"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=10, # Increased timeout for robustness
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
             return result.returncode == 0
         except (subprocess.SubprocessError, FileNotFoundError):
@@ -87,6 +100,9 @@ class VisioTempFileRemoverGUI:
         
         self.delete_button = ttk.Button(button_frame, text="Delete Selected Files", command=self.delete_files, state=tk.DISABLED)
         self.delete_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.select_all_button = ttk.Button(button_frame, text="Select All", command=self.select_all_files, state=tk.DISABLED)
+        self.select_all_button.pack(side=tk.LEFT, padx=(0, 5))
         
         # Progress bar
         self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
@@ -145,6 +161,13 @@ class VisioTempFileRemoverGUI:
             self.delete_button.config(state=tk.NORMAL)
         else:
             self.delete_button.config(state=tk.DISABLED)
+
+    def select_all_files(self):
+        """Select all items in the treeview"""
+        all_items = self.tree.get_children()
+        if all_items:
+            self.tree.selection_set(all_items)
+            # The on_tree_select method will automatically enable the delete button
             
     def scan_files(self):
         """Scan for Visio temp files"""
@@ -160,6 +183,7 @@ class VisioTempFileRemoverGUI:
         # Start scanning in a separate thread to prevent UI freezing
         self.scan_button.config(state=tk.DISABLED)
         self.delete_button.config(state=tk.DISABLED)
+        self.select_all_button.config(state=tk.DISABLED)
         self.progress.start()
         self.status_var.set("Scanning for Visio temp files...")
         
@@ -187,7 +211,7 @@ class VisioTempFileRemoverGUI:
             dir_quoted = f"'{escaped_dir}'"
             
             # Patterns to search for
-            patterns = ["~$*.vssx", "~$*.vsdx", "~$*.vstx", "~$*.vsdm", "~$*.vsd"]
+            patterns = ["~$$*.*"]
             patterns_list = [f"'{p}'" for p in patterns]
             patterns_array = "@(" + ",".join(patterns_list) + ")"
             
@@ -209,7 +233,8 @@ class VisioTempFileRemoverGUI:
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
-                timeout=60  # 60 second timeout
+                timeout=60,  # 60 second timeout
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
             
             print(f"PowerShell return code: {result.returncode}")
@@ -221,7 +246,7 @@ class VisioTempFileRemoverGUI:
                 print("Trying direct PowerShell approach like web version...")
                 # Direct approach like the web version
                 escaped_path = directory.replace("'", "''")
-                direct_ps_command = f"Get-ChildItem -Path '{escaped_path}' -Recurse -File -Force -Include \"~$*.vssx\",\"~$*.vsdx\",\"~$*.vstx\",\"~$*.vsdm\",\"~$*.vsd\" | Select-Object -Property FullName,Name | ConvertTo-Json"
+                direct_ps_command = f"Get-ChildItem -Path '{escaped_path}' -Recurse -File -Force -Include \"~$$*.*\" | Select-Object -Property FullName,Name | ConvertTo-Json"
                 
                 direct_ps_cmd_list = [
                     "powershell",
@@ -237,7 +262,8 @@ class VisioTempFileRemoverGUI:
                     capture_output=True,
                     text=True,
                     encoding='utf-8',
-                    timeout=60
+                    timeout=60,
+                    creationflags=subprocess.CREATE_NO_WINDOW
                 )
                 
                 print(f"Direct PowerShell return code: {direct_result.returncode}")
@@ -309,7 +335,11 @@ class VisioTempFileRemoverGUI:
         if not self.found_files:
             self.status_var.set("No matching Visio temp files found.")
             messagebox.showinfo("Scan Complete", "No matching Visio temp files were found.")
+            self.select_all_button.config(state=tk.DISABLED)
             return
+
+        # Enable select all button when files are found
+        self.select_all_button.config(state=tk.NORMAL)
             
         # Populate treeview
         for file_info in self.found_files:
@@ -362,6 +392,9 @@ class VisioTempFileRemoverGUI:
         """Called when scan thread finishes"""
         self.scan_button.config(state=tk.NORMAL)
         self.progress.stop()
+        # Re-enable select all button if files were found
+        if self.found_files:
+            self.select_all_button.config(state=tk.NORMAL)
         
     def delete_files(self):
         """Delete selected files"""
@@ -399,6 +432,7 @@ class VisioTempFileRemoverGUI:
         # Start deletion in a separate thread
         self.scan_button.config(state=tk.DISABLED)
         self.delete_button.config(state=tk.DISABLED)
+        self.select_all_button.config(state=tk.DISABLED)
         self.progress.start()
         self.status_var.set("Deleting selected files...")
         
@@ -416,23 +450,15 @@ class VisioTempFileRemoverGUI:
             remove_script = resource_path("scripts") / "Remove-VisioTempFiles.ps1"
             
             if remove_script.exists():
-                # Escape file paths for PowerShell
-                escaped_paths = [path.replace("'", "''") for path in file_paths]
-                quoted_paths = [f"'{path}'" for path in escaped_paths]
-                paths_array = "@(" + ",".join(quoted_paths) + ")"
-                
-                # Build PowerShell command
-                ps_command = f"& '{remove_script}' -FilePaths {paths_array} -AsJson"
-                
-                # Execute PowerShell command
+                # Use -File and pass file paths as separate arguments
                 ps_cmd_list = [
                     "powershell",
                     "-NoProfile",
                     "-ExecutionPolicy", "Bypass",
-                    "-Command", ps_command
-                ]
-                
-                print(f"Executing PowerShell delete command: {ps_command}")
+                    "-File", str(remove_script),
+                ] + file_paths + ["-AsJson"]
+
+                print(f"Executing PowerShell delete command with -File: {ps_cmd_list}")
                 
                 result = subprocess.run(
                     ps_cmd_list,
@@ -479,7 +505,8 @@ class VisioTempFileRemoverGUI:
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
-                timeout=60
+                timeout=60,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
             
             print(f"Direct PowerShell delete return code: {direct_result.returncode}")
@@ -516,6 +543,9 @@ class VisioTempFileRemoverGUI:
         """Called when deletion thread finishes"""
         self.scan_button.config(state=tk.NORMAL)
         self.progress.stop()
+        # Re-enable select all button if files are still available
+        if self.found_files:
+            self.select_all_button.config(state=tk.NORMAL)
         
     def format_file_size(self, size_bytes):
         """Format file size in human readable format"""
