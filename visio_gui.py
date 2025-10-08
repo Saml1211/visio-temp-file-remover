@@ -7,7 +7,15 @@ import threading
 from pathlib import Path
 import sys
 
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = Path(__file__).resolve().parent
 
+    return Path(base_path) / relative_path
 
 class VisioTempFileRemoverGUI:
     def __init__(self, root):
@@ -15,6 +23,9 @@ class VisioTempFileRemoverGUI:
         self.root.title("Visio Temp File Remover")
         self.root.geometry("800x600")
         self.root.resizable(True, True)
+        
+        # Set application icon
+        self.set_icon()
         
         # Configure styles
         self.style = ttk.Style()
@@ -38,7 +49,15 @@ class VisioTempFileRemoverGUI:
             self.root.destroy()
             return
 
-                
+    def set_icon(self):
+        """Set the application icon using the .ico file"""
+        icon_path = resource_path("public/app_icon.ico")
+        if icon_path.exists():
+            try:
+                self.root.iconbitmap(icon_path)
+            except tk.TclError as e:
+                print(f"Warning: Could not set icon. Ensure the file is a valid .ico format. Error: {e}")
+
     def is_powershell_available(self):
         """Check if PowerShell is available on the system"""
         try:
@@ -184,7 +203,7 @@ class VisioTempFileRemoverGUI:
             escaped_dir = directory.replace("'", "''")
 
             # Build PowerShell command
-            ps_command = f"Get-ChildItem -Path '{escaped_dir}' -Recurse -File -Force -Include \"~$$*.*\" | Select-Object -Property FullName,Name,DirectoryName,@{Name=\"LastModified\";Expression={{\$_.LastWriteTime.ToString(\"yyyy-MM-dd HH:mm:ss\")}}},@{Name=\"Size\";Expression={{\$_.Length}}} | ConvertTo-Json"
+            ps_command = f"Get-ChildItem -Path '{escaped_dir}' -Recurse -File -Force -Include \"~$$*.*\" | Select-Object -Property FullName,Name,DirectoryName,@{Name=\"LastModified\";Expression={{$\\.LastWriteTime.ToString(\"yyyy-MM-dd HH:mm:ss\")}}},@{Name=\"Size\";Expression={{$\\.Length}}} | ConvertTo-Json"
 
             # Execute PowerShell command
             ps_cmd_list = [
