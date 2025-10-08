@@ -99,8 +99,8 @@ $RECYCLE.BIN/
 .idea_modules/
 
 # Build output
-# dist/
-# build/
+dist/
+build/
 
 # Temp files
 *.tmp
@@ -117,7 +117,7 @@ web-ui/node_modules/
 memory-bank/
 
 # Release files
-# release/
+release/
 
 # Python (GUI tooling)
 __pycache__/
