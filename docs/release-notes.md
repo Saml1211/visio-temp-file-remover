@@ -1,65 +1,28 @@
-# Visio Temp File Remover GUI - Release Notes
+# Visio Temp File Remover GUI - v1.0.0
 
-## Version 1.0.0
+This initial release provides a standalone desktop application for finding and removing corrupted Visio temporary files.
 
-### New Features
-- **Standalone Desktop Application**: Complete GUI application built with Python Tkinter that runs locally without requiring a web server
-- **User-Friendly Interface**: Intuitive graphical interface for scanning and removing Visio temporary files
-- **Directory Selection**: Easy browsing and selection of directories to scan
-- **File Display**: Tabular view showing file name, relative path, size, and last modified date
-- **File Selection**: Select individual or multiple files for deletion
-- **Safe Deletion**: Confirmation prompts before deleting files
-- **Progress Indicators**: Visual feedback during scanning and deletion operations
-- **Error Handling**: Comprehensive error handling with user-friendly messages
+## Highlights
+- **Standalone Executable:** No installation needed, just run the `.exe` file.
+- **Easy to Use:** A simple and intuitive graphical interface.
+- **Powerful Scanning:** Quickly finds Visio temporary files in any directory.
+- **Safe Deletion:** Review and select files before deleting them.
 
-### Technical Features
-- **Dual Approach**: Uses both PowerShell scripts and direct PowerShell commands for maximum compatibility
-- **Fallback Mechanisms**: Automatically falls back to direct PowerShell commands if scripts fail
-- **Consistent Behavior**: Same file detection and deletion logic as the web version
-- **Cross-Platform Path Handling**: Proper handling of Windows file paths
-- **JSON Parsing**: Robust parsing of PowerShell output in various formats
-- **Threading**: Background processing to prevent UI freezing during operations
+## Features
+- Scan any directory for Visio temporary files (`~$*.vssx`).
+- View file details: name, path, size, and last modified date.
+- Select and delete multiple files at once.
+- Confirmation prompt before deletion to prevent accidents.
+- Built-in error handling and progress indicators.
+- Uses PowerShell for robust file detection and removal.
 
-### Improvements
-- **Optimized Display**: Relative paths shown instead of full paths for better readability
-- **Column Widths**: Adjusted column widths for optimal information display
-- **PowerShell Detection**: Improved detection and error handling for PowerShell availability
-- **File Size Formatting**: Human-readable file sizes (B, KB, MB, GB)
+## Installation and Usage
+1.  Download the `VisioTempFileRemover.exe` file from the release assets.
+2.  Run the application by double-clicking the `.exe` file.
+3.  Alternatively, you can run from source by downloading the source code and running `run_gui.bat` or `python visio_gui.py`.
+4.  Select a directory, scan for files, and delete the ones you want to remove.
 
-### Requirements
-- Windows operating system
-- Python 3.6 or higher
-- PowerShell (included with Windows)
-
-### Installation
-1. Extract the release package
-2. Double-click `run_gui.bat` to start the application
-3. Or run `python visio_gui.py` from the command line
-
-### Usage
-1. Select a directory to scan for Visio temporary files
-2. Click "Scan for Files"
-3. Review the results in the table
-4. Select files to delete
-5. Click "Delete Selected Files"
-6. Confirm the deletion
-
-### Files Included
-- `visio_gui.py`: Main application file
-- `run_gui.bat`: Batch file to easily start the application
-- `docs/gui.md`: Documentation for the GUI application
-- `docs/quickstart.md`: Quick start and usage guide
-- `docs/build-gui.md`: Instructions for creating a standalone executable
-- `scripts/Scan-VisioTempFiles.ps1`: PowerShell script for scanning files
-- `scripts/Remove-VisioTempFiles.ps1`: PowerShell script for deleting files
-- `config.json`: Configuration file
-- `LICENSE`: License information
-
-### Known Issues
-None at this time.
-
-### Future Enhancements (Planned)
-- Configuration options for file patterns
-- Logging of operations
-- Recent directories list
-- Export functionality for scan results
+## Requirements
+- Windows OS
+- Python 3.6+
+- PowerShell
