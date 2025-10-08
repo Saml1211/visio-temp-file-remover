@@ -2,131 +2,85 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-A specialized web application designed to find and remove corrupted temporary Visio files that can cause errors in Microsoft Visio environments.
+A simple and effective tool to find and remove corrupted temporary Visio files that cause errors.
 
-![Visio Temp File Remover Screenshot](https://via.placeholder.com/800x400?text=Visio+Temp+File+Remover)
+<!-- Add a nice screenshot of the application here -->
+<!-- ![Visio Temp File Remover Screenshot](path/to/screenshot.png) -->
 
-## 🔍 Overview
+## The Problem
 
-The Visio Temp File Remover tool addresses a common problem in Microsoft Visio environments where temporary files (specifically those matching the pattern `~$*.vssx`) can cause errors and corruption in Visio shapes and templates. These files are often hidden by default and difficult to locate and remove through normal file management tools.
+If you've ever encountered frustrating errors in Microsoft Visio related to shapes and templates, the cause is often hidden, corrupted temporary files (`~$*.vssx`). These files are hard to find and remove manually.
 
-This project provides two interfaces for the same core functionality:
-1. **Web Interface**: A web-based application for server environments
-2. **Desktop GUI**: A standalone desktop application for local use
+## The Solution
 
-Both interfaces allow users to:
-1. Scan directories for problematic temporary files
-2. Review what will be deleted before taking action
-3. Safely remove these files with proper permission handling
+This tool provides a simple interface to scan for and delete these problematic files, keeping your Visio environment clean and error-free. It is available as a standalone desktop application and a web-based tool.
 
-## ✨ Features
+## Features
 
-- **Smart Scanning**: Recursively scans specified directories for Visio temporary files matching `~$*.vssx` pattern
-- **Hidden File Detection**: Uses PowerShell with proper escaping to find hidden system files that Windows Explorer might not display
-- **Preview Before Deletion**: Lists all found files with full paths before any deletion occurs
-- **Selective Deletion**: Choose which files to delete rather than removing all matches
-- **User-Friendly Interface**: Simple interfaces that require no technical knowledge to operate
-- **Secure Operations**: All file operations are performed with proper error handling
-- **Dual Interface**: Available as both web application and standalone desktop GUI
-- **Consistent Behavior**: Both interfaces use the same PowerShell scripts for identical functionality
+-   **Find and Delete:** Quickly scan any directory to find and remove temporary Visio files.
+-   **Safe and Secure:** Preview the files before deletion and confirm your action. All operations are performed locally on your machine.
+-   **Two Interfaces:** Choose between a user-friendly desktop GUI or a web interface for server environments.
+-   **Powered by PowerShell:** Uses robust PowerShell scripts for reliable file detection and removal.
 
-## 🛠️ Technology Stack
+## Getting Started
 
-**Web Interface**:
-- **Backend**: Node.js with Express.js
-- **Frontend**: HTML5, CSS3, and vanilla JavaScript
-- **System Integration**: PowerShell commands for file operations
-- **Styling**: Bootstrap for responsive design
-- **HTTP Requests**: Fetch API for AJAX operations
+### Standalone Executable (Recommended)
 
-**Desktop GUI**:
-- **GUI Framework**: Python Tkinter
-- **System Integration**: PowerShell commands for file operations
-- **Packaging**: PyInstaller (for standalone executables)
+This is the easiest way to use the tool on a Windows machine.
 
-**Shared Components**:
-- **File Operations**: PowerShell scripts (`Scan-VisioTempFiles.ps1`, `Remove-VisioTempFiles.ps1`)
-- **Configuration**: JSON configuration files
+1.  **Download the Executable:**
+    Go to the [Releases](https://github.com/Saml1211/visio-temp-file-remover/releases) page and download the latest `VisioTempFileRemover.exe` file.
 
-## 📋 Requirements
+2.  **Run the Application:**
+    Double-click the downloaded `.exe` file to start the application.
 
-- Windows environment (PowerShell required)
-- Node.js (v12.0.0 or higher) for web interface
-- Python 3.6 or higher for GUI interface
-- Administrative privileges (for accessing system folders)
-- Web browser (Chrome, Firefox, Edge recommended)
+### From Source
 
-### GUI Requirements
-The GUI application uses only the Python standard library:
-- tkinter (included with Python) for the graphical interface
-- subprocess, json, os, threading, and pathlib (all standard library modules)
-- No additional Python packages are required
+If you want to run the tool from the source code, you have two options:
 
-## 📚 Documentation
+#### Desktop GUI
 
-For detailed documentation, please see the [Documentation Index](docs/index.md).
+1.  **Prerequisites:**
+    *   Python 3.6+
+    *   PowerShell
+2.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/Saml1211/visio-temp-file-remover.git
+    cd visio-temp-file-remover
+    ```
+3.  **Run the application:**
+    *   Double-click `scripts/run_gui.bat` (on Windows).
+    *   Or run `python visio_gui.py` from your terminal.
 
-Key documents include:
-- [Quick Start Guide](docs/quickstart.md) - For quickly setting up and running the web version
-- [Installation Guide](docs/installation.md) - For installing and using the GUI version
-- [GUI Documentation](docs/gui.md) - Information about the GUI application
-- [Release Notes](docs/release-notes.md) - Details about changes in each release
+#### Web Interface
 
-## 🚀 Getting Started
+1.  **Prerequisites:**
+    *   Node.js v12.0+
+    *   npm
+    *   PowerShell
+2.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/Saml1211/visio-temp-file-remover.git
+    cd visio-temp-file-remover
+    ```
+3.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+4.  **Start the server:**
+    *   Double-click `scripts/start.bat` (on Windows).
+    *   Or run `npm start` from your terminal.
+5.  **Access the application:**
+    Open your web browser and go to `http://localhost:3000`.
 
-This project provides two ways to use the Visio Temp File Remover tool:
+## Documentation
 
-### Web Interface (Original Method)
-For quick setup and usage instructions, please refer to the [Quick Start Guide](docs/quickstart.md).
+For more detailed information, please see the [documentation](docs/index.md).
 
-Basic steps include:
-1. Clone this repository
-2. Install dependencies with `npm install`
-3. Start the server with `npm start` or by running `start.bat`
-4. Access the web interface at http://localhost:3000
+## Contributing
 
-### Desktop GUI (Recommended for Local Use)
-The project includes a standalone desktop GUI application that runs locally without a web server:
+Contributions are welcome! Please feel free to submit a pull request or open an issue.
 
-1. Download the latest release from the [Releases](https://github.com/Saml1211/visio-temp-file-remover2/releases) page
-2. Extract the package to a folder of your choice
-3. Double-click on `run_gui.bat` in the root directory, or run `python visio_gui.py` from the command line
-4. Use the GUI to scan directories and remove Visio temp files
+## License
 
-The GUI application provides the same functionality as the web interface but runs locally without needing to start a server. It uses the same PowerShell scripts for consistent behavior.
-
-### Creating a Standalone Executable
-To create a standalone executable (.exe) file:
-
-1. Install PyInstaller: `pip install pyinstaller`
-2. Create the executable: `pyinstaller --onefile --windowed --name "VisioTempFileRemover" --add-data "scripts;scripts" visio_gui.py`
-3. The executable will be created in the `dist` folder
-4. Copy the `scripts` folder to the same directory as the executable
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-```
-MIT License
-
-Copyright (c) 2023 Visio Temp File Remover
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
