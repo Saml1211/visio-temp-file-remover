@@ -31,7 +31,8 @@ def create_release_package():
         "config.json",
         "scripts/Scan-VisioTempFiles.ps1",
         "scripts/Remove-VisioTempFiles.ps1",
-        "scripts/.placeholder"
+        "scripts/.placeholder",
+        "dist/VisioTempFileRemover.exe"
     ]
     
     # Copy files to package directory

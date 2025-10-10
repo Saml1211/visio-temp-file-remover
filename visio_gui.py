@@ -203,7 +203,7 @@ class VisioTempFileRemoverGUI:
             escaped_dir = directory.replace("'", "''")
 
             # Build PowerShell command
-            ps_command = f"Get-ChildItem -Path '{escaped_dir}' -Recurse -File -Force -Include \"~$$*.*\" | Select-Object -Property FullName,Name,DirectoryName,@{Name=\"LastModified\";Expression={{$\\.LastWriteTime.ToString(\"yyyy-MM-dd HH:mm:ss\")}}},@{Name=\"Size\";Expression={{$\\.Length}}} | ConvertTo-Json"
+            ps_command = f"Get-ChildItem -Path '{escaped_dir}' -Recurse -File -Force -Include \"~$$*.*\" | Select-Object -Property FullName,Name,DirectoryName,@{{Name=\"LastModified\";Expression={{$_.LastWriteTime.ToString(\"yyyy-MM-dd HH:mm:ss\")}}}},@{{Name=\"Size\";Expression={{$_.Length}}}} | ConvertTo-Json"
 
             # Execute PowerShell command
             ps_cmd_list = [
